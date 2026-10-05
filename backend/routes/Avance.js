@@ -62,6 +62,14 @@ const uploadImageToCloudinary = (
           use_filename: false,
           unique_filename: true,
           overwrite: false,
+          transformation: [
+            {
+              width: 1800,
+              height: 1800,
+              crop: "limit",
+              quality: "auto:good",
+            },
+          ],
         },
         (error, result) => {
           if (error) {

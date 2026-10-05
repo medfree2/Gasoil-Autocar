@@ -71,6 +71,53 @@ const resolveFileUrl = (value) => {
   return `${FILE_URL}${value}`;
 };
 
+const cloudinaryOptimizedUrl = (
+  value,
+  {
+    width = 640,
+    quality = "auto:good",
+  } = {}
+) => {
+  const url = resolveFileUrl(value);
+
+  if (!url) return "";
+
+  if (!/res\.cloudinary\.com/i.test(url)) {
+    return url;
+  }
+
+  const marker = "/upload/";
+
+  if (!url.includes(marker)) {
+    return url;
+  }
+
+  const transformation = [
+    "f_auto",
+    `q_${quality}`,
+    `w_${width}`,
+    "c_limit",
+    "dpr_auto",
+  ].join(",");
+
+  return url.replace(
+    marker,
+    `${marker}${transformation}/`
+  );
+};
+
+const thumbnailUrl = (value) =>
+  cloudinaryOptimizedUrl(value, {
+    width: 320,
+    quality: "auto:eco",
+  });
+
+const previewImageUrl = (value) =>
+  cloudinaryOptimizedUrl(value, {
+    width: 1280,
+    quality: "auto:good",
+  });
+
 const todayISO = () => new Date().toISOString().split("T")[0];
 
 const formatMoney = (value) =>
@@ -777,7 +824,7 @@ function App() {
 
     setPreview(
       item.imageBon
-        ? resolveFileUrl(item.imageBon)
+        ? previewImageUrl(item.imageBon)
         : ""
     );
 
@@ -1509,7 +1556,9 @@ function App() {
                                 rel="noreferrer"
                               >
                                 <img
-                                  src={resolveFileUrl(item.imageBon)}
+                                  src={thumbnailUrl(item.imageBon)}
+                                  loading="lazy"
+                                  decoding="async"
                                   alt={`Bon ${item.numeroBon}`}
                                   className="h-14 w-20 rounded-xl border border-slate-200 object-cover shadow-sm"
                                 />
@@ -2793,7 +2842,9 @@ function AdvancePage({
                       className="group"
                     >
                       <img
-                        src={resolveFileUrl(activeAdvance.imageCheque)}
+                        src={thumbnailUrl(activeAdvance.imageCheque)}
+                        loading="lazy"
+                        decoding="async"
                         alt="Chèque d'avance"
                         className="h-28 w-44 rounded-2xl border border-white/20 object-cover shadow-xl transition group-hover:scale-[1.03]"
                       />
@@ -2945,7 +2996,9 @@ function AdvancePage({
                           rel="noreferrer"
                         >
                           <img
-                            src={resolveFileUrl(avance.imageCheque)}
+                            src={thumbnailUrl(avance.imageCheque)}
+                            loading="lazy"
+                            decoding="async"
                             alt={`Chèque ${avance.numeroCheque}`}
                             className="h-12 w-20 rounded-lg border border-slate-200 object-cover"
                           />
