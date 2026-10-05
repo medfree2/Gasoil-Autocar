@@ -61,6 +61,16 @@ const AVANCES_API = `${API_BASE_URL}/api/avances`;
 const ACTIVE_AVANCE_API = `${API_BASE_URL}/api/avances/active`;
 const AUTH_API = `${API_BASE_URL}/api/auth`;
 
+const resolveFileUrl = (value) => {
+  if (!value) return "";
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  return `${FILE_URL}${value}`;
+};
+
 const todayISO = () => new Date().toISOString().split("T")[0];
 
 const formatMoney = (value) =>
@@ -767,7 +777,7 @@ function App() {
 
     setPreview(
       item.imageBon
-        ? `${FILE_URL}${item.imageBon}`
+        ? resolveFileUrl(item.imageBon)
         : ""
     );
 
@@ -1070,7 +1080,9 @@ function App() {
     });
 
     dayRecords.forEach((item, index) => {
-      const photoUrl = item.imageBon ? `${FILE_URL}${item.imageBon}` : "";
+      const photoUrl = item.imageBon
+        ? resolveFileUrl(item.imageBon)
+        : "";
 
       const row = worksheet.addRow([
         item.autocar,
@@ -1492,12 +1504,12 @@ function App() {
                           <td className="px-6 py-5">
                             {item.imageBon ? (
                               <a
-                                href={`${FILE_URL}${item.imageBon}`}
+                                href={resolveFileUrl(item.imageBon)}
                                 target="_blank"
                                 rel="noreferrer"
                               >
                                 <img
-                                  src={`${FILE_URL}${item.imageBon}`}
+                                  src={resolveFileUrl(item.imageBon)}
                                   alt={`Bon ${item.numeroBon}`}
                                   className="h-14 w-20 rounded-xl border border-slate-200 object-cover shadow-sm"
                                 />
@@ -2775,13 +2787,13 @@ function AdvancePage({
 
                   {activeAdvance.imageCheque && (
                     <a
-                      href={`${FILE_URL}${activeAdvance.imageCheque}`}
+                      href={resolveFileUrl(activeAdvance.imageCheque)}
                       target="_blank"
                       rel="noreferrer"
                       className="group"
                     >
                       <img
-                        src={`${FILE_URL}${activeAdvance.imageCheque}`}
+                        src={resolveFileUrl(activeAdvance.imageCheque)}
                         alt="Chèque d'avance"
                         className="h-28 w-44 rounded-2xl border border-white/20 object-cover shadow-xl transition group-hover:scale-[1.03]"
                       />
@@ -2928,12 +2940,12 @@ function AdvancePage({
                     <td className="px-6 py-5">
                       {avance.imageCheque ? (
                         <a
-                          href={`${FILE_URL}${avance.imageCheque}`}
+                          href={resolveFileUrl(avance.imageCheque)}
                           target="_blank"
                           rel="noreferrer"
                         >
                           <img
-                            src={`${FILE_URL}${avance.imageCheque}`}
+                            src={resolveFileUrl(avance.imageCheque)}
                             alt={`Chèque ${avance.numeroCheque}`}
                             className="h-12 w-20 rounded-lg border border-slate-200 object-cover"
                           />

@@ -1,59 +1,26 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
 
-const Gasoil = require("../models/Gasoil");
-const Avance = require("../models/Avance");
-
-const router = express.Router();
-
-const uploadDir =
-  process.env.VERCEL === "1"
-    ? path.join("/tmp", "uploads")
-    : path.join(
-        __dirname,
-        "../uploads"
-      );
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, {
-    recursive: true,
-  });
-}
-
-const storage = multer.diskStorage({
-  destination: function (
-    req,
-    file,
-    cb
-  ) {
-    cb(null, uploadDir);
-  },
-
-  filename: function (
-    req,
-    file,
-    cb
-  ) {
-    const uniqueName =
-      `bon-${Date.now()}-` +
-      Math.round(
-        Math.random() * 1e9
-      ) +
-      path.extname(
-        file.originalname
-      );
-
-    cb(null, uniqueName);
-  },
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const fileFilter = (
-  req,
-  file,
-  cb
-) => {
+const ensureCloudinaryConfig = () => {
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    throw new Error(
+      "Configuration Cloudinary manquante."
+    );
+  }
+};
+
+const fileFilter = (req, file, cb) => {
   const allowedTypes = [
     "image/jpeg",
     "image/jpg",
@@ -61,11 +28,7 @@ const fileFilter = (
     "image/webp",
   ];
 
-  if (
-    allowedTypes.includes(
-      file.mimetype
-    )
-  ) {
+  if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(
@@ -77,13 +40,133 @@ const fileFilter = (
 };
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: {
-    fileSize:
-      10 * 1024 * 1024,
+    fileSize: 10 * 1024 * 1024,
   },
 });
+
+const uploadImageToCloudinary = (
+  file,
+  folder
+) =>
+  new Promise((resolve, reject) => {
+    ensureCloudinaryConfig();
+
+    const stream =
+      cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: "image",
+          use_filename: false,
+          unique_filename: true,
+          overwrite: false,
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(result);
+        }
+      );
+
+    stream.end(file.buffer);
+  });
+
+const getCloudinaryPublicId = (imageUrl) => {
+  if (!imageUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(imageUrl);
+
+    if (
+      !parsed.hostname.endsWith(
+        "res.cloudinary.com"
+      )
+    ) {
+      return null;
+    }
+
+    const parts =
+      parsed.pathname
+        .split("/")
+        .filter(Boolean);
+
+    const uploadIndex =
+      parts.indexOf("upload");
+
+    if (uploadIndex === -1) {
+      return null;
+    }
+
+    const publicParts =
+      parts.slice(uploadIndex + 1);
+
+    if (
+      publicParts[0] &&
+      /^v\d+$/.test(publicParts[0])
+    ) {
+      publicParts.shift();
+    }
+
+    if (!publicParts.length) {
+      return null;
+    }
+
+    const lastPart =
+      publicParts.pop();
+
+    const withoutExtension =
+      lastPart.replace(
+        /\.[^/.]+$/,
+        ""
+      );
+
+    return [
+      ...publicParts,
+      withoutExtension,
+    ].join("/");
+  } catch {
+    return null;
+  }
+};
+
+const deleteCloudinaryImage = async (
+  imageUrl
+) => {
+  const publicId =
+    getCloudinaryPublicId(imageUrl);
+
+  if (!publicId) {
+    return;
+  }
+
+  try {
+    ensureCloudinaryConfig();
+
+    await cloudinary.uploader.destroy(
+      publicId,
+      {
+        resource_type: "image",
+      }
+    );
+  } catch (error) {
+    console.error(
+      "⚠️ Suppression Cloudinary impossible :",
+      error.message
+    );
+  }
+};
+
+const Gasoil = require("../models/Gasoil");
+const Avance = require("../models/Avance");
+
+const router = express.Router();
 
 const getRemainingBalance =
   async (
@@ -203,6 +286,8 @@ router.post(
   "/",
   upload.single("imageBon"),
   async (req, res) => {
+    let uploadedImageUrl = "";
+
     try {
       const {
         date,
@@ -222,15 +307,6 @@ router.post(
         !numeroBon ||
         !prixTotal
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           message:
             "Veuillez remplir tous les champs obligatoires.",
@@ -244,15 +320,6 @@ router.post(
         });
 
       if (duplicate) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(409).json({
           message:
             "Ce numéro de bon existe déjà.",
@@ -267,15 +334,6 @@ router.post(
         });
 
       if (!avance) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           code:
             "NO_ACTIVE_ADVANCE",
@@ -301,15 +359,6 @@ router.post(
         ) ||
         prixTotalNumber <= 0
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           message:
             "Quantité ou prix invalide.",
@@ -327,15 +376,6 @@ router.post(
         prixTotalNumber >
         remaining
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(409).json({
           code:
             "INSUFFICIENT_ADVANCE",
@@ -359,6 +399,17 @@ router.post(
               0
             ),
         });
+      }
+
+      if (req.file) {
+        const uploadResult =
+          await uploadImageToCloudinary(
+            req.file,
+            "suivi-gasoil/bons"
+          );
+
+        uploadedImageUrl =
+          uploadResult.secure_url;
       }
 
       const gasoil =
@@ -389,9 +440,7 @@ router.post(
             "",
 
           imageBon:
-            req.file
-              ? `/uploads/${req.file.filename}`
-              : "",
+            uploadedImageUrl,
 
           avance:
             avance._id,
@@ -424,15 +473,10 @@ router.post(
     } catch (error) {
       console.error(error);
 
-      if (
-        req.file &&
-        fs.existsSync(req.file.path)
-      ) {
-        try {
-          fs.unlinkSync(
-            req.file.path
-          );
-        } catch {}
+      if (uploadedImageUrl) {
+        await deleteCloudinaryImage(
+          uploadedImageUrl
+        );
       }
 
       if (
@@ -460,6 +504,8 @@ router.put(
   "/:id",
   upload.single("imageBon"),
   async (req, res) => {
+    let newImageUrl = "";
+
     try {
       const gasoil =
         await Gasoil.findById(
@@ -467,15 +513,6 @@ router.put(
         );
 
       if (!gasoil) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(404).json({
           message:
             "Enregistrement introuvable.",
@@ -500,15 +537,6 @@ router.put(
         !numeroBon ||
         !prixTotal
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           message:
             "Veuillez remplir tous les champs obligatoires.",
@@ -527,15 +555,6 @@ router.put(
         });
 
       if (duplicate) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(409).json({
           message:
             "Ce numéro de bon existe déjà.",
@@ -558,15 +577,6 @@ router.put(
         ) ||
         prixTotalNumber <= 0
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           message:
             "Quantité ou prix invalide.",
@@ -579,15 +589,6 @@ router.put(
         );
 
       if (!avance) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(400).json({
           message:
             "L'avance associée à ce bon est introuvable.",
@@ -606,15 +607,6 @@ router.put(
         prixTotalNumber >
         remaining
       ) {
-        if (
-          req.file &&
-          fs.existsSync(req.file.path)
-        ) {
-          fs.unlinkSync(
-            req.file.path
-          );
-        }
-
         return res.status(409).json({
           code:
             "INSUFFICIENT_ADVANCE",
@@ -640,15 +632,19 @@ router.put(
         });
       }
 
-      const oldImagePath =
-        gasoil.imageBon
-          ? path.join(
-              uploadDir,
-              path.basename(
-                gasoil.imageBon
-              )
-            )
-          : null;
+      const oldImageUrl =
+        gasoil.imageBon || "";
+
+      if (req.file) {
+        const uploadResult =
+          await uploadImageToCloudinary(
+            req.file,
+            "suivi-gasoil/bons"
+          );
+
+        newImageUrl =
+          uploadResult.secure_url;
+      }
 
       gasoil.date =
         date;
@@ -676,22 +672,19 @@ router.put(
         observation?.trim() ||
         "";
 
-      if (req.file) {
+      if (newImageUrl) {
         gasoil.imageBon =
-          `/uploads/${req.file.filename}`;
+          newImageUrl;
       }
 
       await gasoil.save();
 
       if (
-        req.file &&
-        oldImagePath &&
-        fs.existsSync(
-          oldImagePath
-        )
+        newImageUrl &&
+        oldImageUrl
       ) {
-        fs.unlinkSync(
-          oldImagePath
+        await deleteCloudinaryImage(
+          oldImageUrl
         );
       }
 
@@ -705,15 +698,10 @@ router.put(
     } catch (error) {
       console.error(error);
 
-      if (
-        req.file &&
-        fs.existsSync(req.file.path)
-      ) {
-        try {
-          fs.unlinkSync(
-            req.file.path
-          );
-        } catch {}
+      if (newImageUrl) {
+        await deleteCloudinaryImage(
+          newImageUrl
+        );
       }
 
       if (
@@ -758,30 +746,16 @@ router.delete(
           gasoil.avance
         );
 
-      if (gasoil.imageBon) {
-        const fileName =
-          path.basename(
-            gasoil.imageBon
-          );
-
-        const imagePath =
-          path.join(
-            uploadDir,
-            fileName
-          );
-
-        if (
-          fs.existsSync(
-            imagePath
-          )
-        ) {
-          fs.unlinkSync(
-            imagePath
-          );
-        }
-      }
+      const imageToDelete =
+        gasoil.imageBon || "";
 
       await gasoil.deleteOne();
+
+      if (imageToDelete) {
+        await deleteCloudinaryImage(
+          imageToDelete
+        );
+      }
 
       if (
         avance &&
