@@ -829,7 +829,8 @@ function App() {
       depart: "",
       quantite: "",
       numeroBon: "",
-        prixTotal: "",
+      prixUnitaire: String(DEFAULT_UNIT_PRICE),
+      prixTotal: "",
       observation: "",
       imageBon: null,
     });
@@ -1809,43 +1810,43 @@ function App() {
             ) : filteredRecords.length === 0 ? (
               <EmptyBlock />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-[1480px] w-full">
+              <div className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <table className="w-full table-fixed">
                   <thead className="bg-slate-50">
                     <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                      <th className="px-5 py-4">
+                      <th className="w-[9%] px-3 py-4">
                         Date
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[9%] px-3 py-4">
                         N° Bon
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[8%] px-3 py-4">
                         Autocar
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[16%] px-3 py-4">
                         Départ
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[9%] px-3 py-4">
                         Quantité
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[11%] px-3 py-4">
                         Prix total
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[8%] px-3 py-4">
                         Photo
                       </th>
 
-                      <th className="px-5 py-4">
+                      <th className="w-[22%] px-3 py-4">
                         Traçabilité
                       </th>
 
-                      <th className="px-5 py-4 text-center">
+                      <th className="w-[8%] px-3 py-4 text-center">
                         Actions
                       </th>
                     </tr>
@@ -1856,36 +1857,36 @@ function App() {
                       (item) => (
                         <tr
                           key={item._id}
-                          className="transition hover:bg-blue-50/40"
+                          className="align-middle transition hover:bg-blue-50/40"
                         >
-                          <td className="whitespace-nowrap px-5 py-5 font-bold text-slate-600">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm font-bold text-slate-600">
                             {formatDate(
                               item.date
                             )}
                           </td>
 
-                          <td className="px-5 py-5">
-                            <span className="inline-flex rounded-lg bg-amber-50 px-3 py-2 font-black text-amber-700">
+                          <td className="px-3 py-4">
+                            <span className="inline-flex rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm font-black text-amber-700">
                               {
                                 item.numeroBon
                               }
                             </span>
                           </td>
 
-                          <td className="px-5 py-5">
-                            <span className="inline-flex rounded-xl bg-blue-50 px-3 py-2 font-black text-blue-700">
+                          <td className="px-3 py-4">
+                            <span className="inline-flex rounded-xl bg-blue-50 px-2.5 py-1.5 text-sm font-black text-blue-700">
                               {
                                 item.autocar
                               }
                             </span>
                           </td>
 
-                          <td className="px-5 py-5 font-bold">
+                          <td className="break-words px-3 py-4 text-sm font-bold leading-5">
                             {item.depart}
                           </td>
 
-                          <td className="whitespace-nowrap px-5 py-5">
-                            <span className="text-lg font-black">
+                          <td className="whitespace-nowrap px-3 py-4">
+                            <span className="text-base font-black">
                               {formatNumber(
                                 item.quantite
                               )}{" "}
@@ -1893,14 +1894,14 @@ function App() {
                             </span>
                           </td>
 
-                          <td className="whitespace-nowrap px-5 py-5 text-lg font-black">
+                          <td className="whitespace-nowrap px-3 py-4 text-base font-black">
                             {formatMoney(
                               item.prixTotal
                             )}{" "}
                             DH
                           </td>
 
-                          <td className="px-5 py-5">
+                          <td className="px-3 py-4">
                             {item.imageBon ? (
                               <a
                                 href={resolveFileUrl(
@@ -1922,11 +1923,11 @@ function App() {
                                   alt={`Bon ${item.numeroBon}`}
                                   loading="lazy"
                                   decoding="async"
-                                  className="h-14 w-20 rounded-xl border border-slate-200 object-cover shadow-sm"
+                                  className="h-12 w-16 rounded-xl border border-slate-200 object-cover shadow-sm transition hover:scale-105"
                                 />
                               </a>
                             ) : (
-                              <div className="flex h-14 w-20 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                              <div className="flex h-12 w-16 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
                                 <ImageIcon
                                   size={20}
                                 />
@@ -1934,54 +1935,70 @@ function App() {
                             )}
                           </td>
 
-                          <td className="px-5 py-5">
-                            <div className="min-w-64 space-y-3">
-                              <div>
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                  Saisi par
-                                </p>
-                                <p className="mt-1 text-sm font-black text-slate-700">
-                                  {auditUserLabel(
-                                    item,
-                                    "createdBy"
-                                  )}
-                                </p>
-                                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                                  {item.createdAt
-                                    ? formatDateTime(
-                                        item.createdAt
-                                      )
-                                    : "—"}
-                                </p>
+                          <td className="px-3 py-4">
+                            <div className="space-y-2">
+                              <div className="rounded-xl bg-slate-50 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                                    <UserRound size={13} />
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                                      Saisi par
+                                    </p>
+                                    <p className="truncate text-xs font-black text-slate-700">
+                                      {auditUserLabel(
+                                        item,
+                                        "createdBy"
+                                      )}
+                                    </p>
+                                    <p className="text-[10px] font-semibold text-slate-400">
+                                      {item.createdAt
+                                        ? formatDateTime(
+                                            item.createdAt
+                                          )
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
 
                               {(item.updatedBy ||
                                 item.updatedByName ||
                                 item.updatedByMatricule ||
                                 item.updatedByEmail) && (
-                                <div className="border-t border-slate-100 pt-2">
-                                  <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">
-                                    Modifié par
-                                  </p>
-                                  <p className="mt-1 text-sm font-black text-violet-700">
-                                    {auditUserLabel(
-                                      item,
-                                      "updatedBy"
-                                    )}
-                                  </p>
-                                  <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                                    {formatDateTime(
-                                      item.lastEditedAt ||
-                                        item.updatedAt
-                                    )}
-                                  </p>
+                                <div className="rounded-xl bg-violet-50 px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                                      <Pencil size={12} />
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <p className="text-[9px] font-black uppercase tracking-[0.12em] text-violet-500">
+                                        Modifié par
+                                      </p>
+                                      <p className="truncate text-xs font-black text-violet-700">
+                                        {auditUserLabel(
+                                          item,
+                                          "updatedBy"
+                                        )}
+                                      </p>
+                                      <p className="text-[10px] font-semibold text-violet-400">
+                                        {formatDateTime(
+                                          item.lastEditedAt ||
+                                            item.updatedAt
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-5 py-5">
-                            <div className="flex items-center justify-center gap-2">
+                          <td className="px-2 py-4">
+                            <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() =>
                                   openEditForm(
@@ -1989,7 +2006,7 @@ function App() {
                                   )
                                 }
                                 title="Modifier"
-                                className="rounded-xl bg-blue-50 p-2.5 text-blue-600 transition hover:bg-blue-100"
+                                className="rounded-xl bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
                               >
                                 <Pencil
                                   size={17}
@@ -2003,7 +2020,7 @@ function App() {
                                   )
                                 }
                                 title="Supprimer"
-                                className="rounded-xl bg-red-50 p-2.5 text-red-500 transition hover:bg-red-100"
+                                className="rounded-xl bg-red-50 p-2 text-red-500 transition hover:bg-red-100"
                               >
                                 <Trash2
                                   size={17}
@@ -2020,19 +2037,19 @@ function App() {
                     <tr className="bg-gradient-to-r from-slate-50 to-blue-50 font-black">
                       <td
                         colSpan="4"
-                        className="px-5 py-5 text-lg"
+                        className="px-3 py-4 text-base"
                       >
                         Total journée
                       </td>
 
-                      <td className="px-5 py-5 text-lg text-blue-700">
+                      <td className="whitespace-nowrap px-3 py-4 text-base text-blue-700">
                         {formatNumber(
                           totalLitres
                         )}{" "}
                         L
                       </td>
 
-                      <td className="px-5 py-5 text-lg text-blue-700">
+                      <td className="whitespace-nowrap px-3 py-4 text-base text-blue-700">
                         {formatMoney(
                           totalPrix
                         )}{" "}
