@@ -1826,7 +1826,7 @@ function App() {
                         Autocar
                       </th>
 
-                      <th className="w-[16%] px-3 py-4">
+                      <th className="w-[18%] px-3 py-4">
                         Départ
                       </th>
 
@@ -1842,7 +1842,7 @@ function App() {
                         Photo
                       </th>
 
-                      <th className="w-[22%] px-3 py-4">
+                      <th className="w-[18%] px-3 py-4">
                         Traçabilité
                       </th>
 
@@ -1936,62 +1936,74 @@ function App() {
                           </td>
 
                           <td className="px-3 py-4">
-                            <div className="space-y-2">
-                              <div className="rounded-xl bg-slate-50 px-3 py-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                                    <UserRound size={13} />
-                                  </div>
+                            <div className="space-y-1.5 text-[11px] leading-4">
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <span className="shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-blue-600">
+                                  Saisi
+                                </span>
 
-                                  <div className="min-w-0">
-                                    <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
-                                      Saisi par
-                                    </p>
-                                    <p className="truncate text-xs font-black text-slate-700">
-                                      {auditUserLabel(
-                                        item,
-                                        "createdBy"
-                                      )}
-                                    </p>
-                                    <p className="text-[10px] font-semibold text-slate-400">
-                                      {item.createdAt
-                                        ? formatDateTime(
-                                            item.createdAt
-                                          )
-                                        : "—"}
-                                    </p>
-                                  </div>
-                                </div>
+                                <span
+                                  className="min-w-0 truncate font-black text-slate-700"
+                                  title={auditUserLabel(
+                                    item,
+                                    "createdBy"
+                                  )}
+                                >
+                                  {auditUserLabel(
+                                    item,
+                                    "createdBy"
+                                  )}
+                                </span>
+
+                                <span className="shrink-0 text-[10px] font-semibold text-slate-400">
+                                  {item.createdAt
+                                    ? new Date(
+                                        item.createdAt
+                                      ).toLocaleTimeString(
+                                        "fr-FR",
+                                        {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        }
+                                      )
+                                    : "—"}
+                                </span>
                               </div>
 
                               {(item.updatedBy ||
                                 item.updatedByName ||
                                 item.updatedByMatricule ||
                                 item.updatedByEmail) && (
-                                <div className="rounded-xl bg-violet-50 px-3 py-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-                                      <Pencil size={12} />
-                                    </div>
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  <span className="shrink-0 rounded-md bg-violet-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-violet-600">
+                                    Modifié
+                                  </span>
 
-                                    <div className="min-w-0">
-                                      <p className="text-[9px] font-black uppercase tracking-[0.12em] text-violet-500">
-                                        Modifié par
-                                      </p>
-                                      <p className="truncate text-xs font-black text-violet-700">
-                                        {auditUserLabel(
-                                          item,
-                                          "updatedBy"
-                                        )}
-                                      </p>
-                                      <p className="text-[10px] font-semibold text-violet-400">
-                                        {formatDateTime(
-                                          item.lastEditedAt ||
-                                            item.updatedAt
-                                        )}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  <span
+                                    className="min-w-0 truncate font-black text-violet-700"
+                                    title={auditUserLabel(
+                                      item,
+                                      "updatedBy"
+                                    )}
+                                  >
+                                    {auditUserLabel(
+                                      item,
+                                      "updatedBy"
+                                    )}
+                                  </span>
+
+                                  <span className="shrink-0 text-[10px] font-semibold text-violet-400">
+                                    {new Date(
+                                      item.lastEditedAt ||
+                                        item.updatedAt
+                                    ).toLocaleTimeString(
+                                      "fr-FR",
+                                      {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      }
+                                    )}
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -2006,7 +2018,7 @@ function App() {
                                   )
                                 }
                                 title="Modifier"
-                                className="rounded-xl bg-blue-50 p-2 text-blue-600 transition hover:bg-blue-100"
+                                className="rounded-lg bg-blue-50 p-1.5 text-blue-600 transition hover:bg-blue-100"
                               >
                                 <Pencil
                                   size={17}
@@ -2020,7 +2032,7 @@ function App() {
                                   )
                                 }
                                 title="Supprimer"
-                                className="rounded-xl bg-red-50 p-2 text-red-500 transition hover:bg-red-100"
+                                className="rounded-lg bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100"
                               >
                                 <Trash2
                                   size={17}
