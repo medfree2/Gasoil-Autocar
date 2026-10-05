@@ -8,10 +8,13 @@ const Avance = require("../models/Avance");
 
 const router = express.Router();
 
-const uploadDir = path.join(
-  __dirname,
-  "../uploads"
-);
+const uploadDir =
+  process.env.VERCEL === "1"
+    ? path.join("/tmp", "uploads")
+    : path.join(
+        __dirname,
+        "../uploads"
+      );
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, {

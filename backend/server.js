@@ -118,11 +118,14 @@ app.use(async (req, res, next) => {
 // TEMPORARY LOCAL UPLOADS
 // ==========================================================
 
+const uploadsDirectory =
+  process.env.VERCEL === "1"
+    ? path.join("/tmp", "uploads")
+    : path.join(__dirname, "uploads");
+
 app.use(
   "/uploads",
-  express.static(
-    path.join(__dirname, "uploads")
-  )
+  express.static(uploadsDirectory)
 );
 
 // ==========================================================
@@ -179,6 +182,24 @@ app.get("/", (req, res) => {
   res.send(
     "🚌 SUIVI GASOIL AUTOCAR API"
   );
+});
+
+// ==========================================================
+// ERROR HANDLER
+// ==========================================================
+
+app.use((error, req, res, next) => {
+  console.error("❌ Erreur serveur :", error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(500).json({
+    message:
+      error?.message ||
+      "Erreur interne du serveur.",
+  });
 });
 
 // ==========================================================
