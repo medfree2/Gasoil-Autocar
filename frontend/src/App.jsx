@@ -71,24 +71,20 @@ const resolveFileUrl = (value) => {
   return `${FILE_URL}${value}`;
 };
 
-const cloudinaryOptimizedUrl = (
+const cloudinaryImageUrl = (
   value,
   {
-    width = 640,
-    quality = "auto:good",
+    width = 320,
+    quality = "auto:eco",
   } = {}
 ) => {
   const url = resolveFileUrl(value);
 
-  if (!url) return "";
-
-  if (!/res\.cloudinary\.com/i.test(url)) {
-    return url;
-  }
-
-  const marker = "/upload/";
-
-  if (!url.includes(marker)) {
+  if (
+    !url ||
+    !url.includes("res.cloudinary.com") ||
+    !url.includes("/upload/")
+  ) {
     return url;
   }
 
@@ -97,26 +93,13 @@ const cloudinaryOptimizedUrl = (
     `q_${quality}`,
     `w_${width}`,
     "c_limit",
-    "dpr_auto",
   ].join(",");
 
   return url.replace(
-    marker,
-    `${marker}${transformation}/`
+    "/upload/",
+    `/upload/${transformation}/`
   );
 };
-
-const thumbnailUrl = (value) =>
-  cloudinaryOptimizedUrl(value, {
-    width: 320,
-    quality: "auto:eco",
-  });
-
-const previewImageUrl = (value) =>
-  cloudinaryOptimizedUrl(value, {
-    width: 1280,
-    quality: "auto:good",
-  });
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
@@ -824,7 +807,7 @@ function App() {
 
     setPreview(
       item.imageBon
-        ? previewImageUrl(item.imageBon)
+        ? resolveFileUrl(item.imageBon)
         : ""
     );
 
@@ -1041,181 +1024,387 @@ function App() {
     workbook.creator = "Suivi Gasoil Autocar";
     workbook.created = new Date();
 
-    const worksheet = workbook.addWorksheet("Suivi quotidien", {
-      views: [{ state: "frozen", ySplit: 7 }],
-    });
+    const fileDate = selectedDate.split("-").reverse().join("-");
+    const stationName =
+      activeAdvance?.station?.trim() ||
+      "STATION EXTERNE";
+
+    const averageUnitPrice =
+      totalLitres > 0
+        ? totalPrix / totalLitres
+        : 0;
+
+    const worksheet = workbook.addWorksheet(
+      fileDate,
+      {
+        views: [
+          {
+            state: "frozen",
+            ySplit: 5,
+          },
+        ],
+      }
+    );
+
+    // ========================================================
+    // HEADER - inspired by the station's original workbook
+    // ========================================================
 
     worksheet.mergeCells("A1:H1");
 
     const titleCell = worksheet.getCell("A1");
-    titleCell.value = "SUIVI GASOIL AUTOCAR";
+
+    titleCell.value =
+      `Etat des prises Gasoil à la Station ${stationName}\n` +
+      `Date : ${fileDate.replaceAll("-", "/")}`;
+
     titleCell.font = {
       name: "Arial",
-      size: 20,
+      size: 16,
       bold: true,
-      color: { argb: "FFFFFFFF" },
+      color: {
+        argb: "FFFFFFFF",
+      },
     };
+
     titleCell.alignment = {
       horizontal: "center",
       vertical: "middle",
+      wrapText: true,
     };
+
     titleCell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FF172554" },
+      fgColor: {
+        argb: "FF17365D",
+      },
     };
-    worksheet.getRow(1).height = 36;
 
-    worksheet.mergeCells("A2:H2");
+    worksheet.getRow(1).height = 42;
 
-    const dateCell = worksheet.getCell("A2");
-    dateCell.value = `Suivi quotidien — ${selectedDateLabel}`;
-    dateCell.font = {
-      size: 12,
+    worksheet.mergeCells("A3:B3");
+
+    worksheet.getCell("A3").value =
+      "Prix moyen calculé à partir des bons :";
+
+    worksheet.getCell("A3").font = {
+      name: "Arial",
+      size: 11,
       bold: true,
-      color: { argb: "FF1D4ED8" },
-    };
-    dateCell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
+      color: {
+        argb: "FF1F2937",
+      },
     };
 
-    worksheet.getCell("A4").value = "Nombre de bons";
-    worksheet.getCell("B4").value = dayRecords.length;
-    worksheet.getCell("D4").value = "Quantité totale";
-    worksheet.getCell("E4").value = totalLitres;
-    worksheet.getCell("G4").value = "Montant total";
-    worksheet.getCell("H4").value = totalPrix;
-    ["A4", "D4", "G4"].forEach((address) => {
-      worksheet.getCell(address).font = {
-        bold: true,
-        color: { argb: "FF475569" },
-      };
-    });
+    worksheet.getCell("C3").value =
+      averageUnitPrice;
 
-    worksheet.getCell("E4").numFmt = '#,##0.00 "L"';
-    worksheet.getCell("H4").numFmt = '#,##0.00 "DH"';
+    worksheet.getCell("C3").numFmt =
+      '#,##0.00 "DH/L"';
 
-    const headerRow = worksheet.getRow(7);
+    worksheet.getCell("C3").font = {
+      name: "Arial",
+      size: 11,
+      bold: true,
+      color: {
+        argb: "FF17365D",
+      },
+    };
+
+    worksheet.mergeCells("F3:G3");
+
+    worksheet.getCell("F3").value =
+      "Nombre de bons :";
+
+    worksheet.getCell("F3").font = {
+      bold: true,
+      color: {
+        argb: "FF1F2937",
+      },
+    };
+
+    worksheet.getCell("H3").value =
+      dayRecords.length;
+
+    worksheet.getCell("H3").font = {
+      bold: true,
+      color: {
+        argb: "FF17365D",
+      },
+    };
+
+    // ========================================================
+    // TABLE
+    // First 5 columns follow the original station workbook
+    // ========================================================
+
+    const headerRow =
+      worksheet.getRow(5);
+
     headerRow.values = [
-      "Autocar",
+      "Date",
+      "N° de bon de sortie",
+      "N° véhicule",
+      "Quantité",
+      "Prix total",
       "Départ",
-      "Quantité (L)",
-      "N° Bon",
-      "Prix (DH)",
       "Observation",
       "Photo du bon",
-      "Date",
     ];
 
-    headerRow.height = 28;
+    headerRow.height = 30;
 
     headerRow.eachCell((cell) => {
       cell.font = {
+        name: "Arial",
+        size: 10,
         bold: true,
-        color: { argb: "FFFFFFFF" },
+        color: {
+          argb: "FFFFFFFF",
+        },
       };
+
       cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FF2563EB" },
+        fgColor: {
+          argb: "FF4472C4",
+        },
       };
+
       cell.alignment = {
         horizontal: "center",
         vertical: "middle",
+        wrapText: true,
+      };
+
+      cell.border = {
+        top: {
+          style: "thin",
+          color: {
+            argb: "FF8EA9DB",
+          },
+        },
+        left: {
+          style: "thin",
+          color: {
+            argb: "FF8EA9DB",
+          },
+        },
+        bottom: {
+          style: "thin",
+          color: {
+            argb: "FF8EA9DB",
+          },
+        },
+        right: {
+          style: "thin",
+          color: {
+            argb: "FF8EA9DB",
+          },
+        },
       };
     });
 
-    dayRecords.forEach((item, index) => {
-      const photoUrl = item.imageBon
-        ? resolveFileUrl(item.imageBon)
-        : "";
+    dayRecords.forEach(
+      (item, index) => {
+        const photoUrl =
+          item.imageBon
+            ? resolveFileUrl(
+                item.imageBon
+              )
+            : "";
 
-      const row = worksheet.addRow([
-        item.autocar,
-        item.depart,
-        Number(item.quantite || 0),
-        item.numeroBon,
-        Number(item.prixTotal || 0),
-        item.observation || "",
-        photoUrl ? "Voir le bon" : "Sans photo",
-        selectedDate,
-      ]);
+        const itemDate =
+          new Date(
+            item.date
+          ).toLocaleDateString(
+            "fr-FR"
+          );
 
-      row.getCell(3).numFmt = '#,##0.00 "L"';
-      row.getCell(5).numFmt = '#,##0.00 "DH"';
+        const row =
+          worksheet.addRow([
+            itemDate,
+            item.numeroBon,
+            item.autocar,
+            Number(
+              item.quantite || 0
+            ),
+            Number(
+              item.prixTotal || 0
+            ),
+            item.depart || "",
+            item.observation || "",
+            photoUrl
+              ? "Voir le bon"
+              : "Sans photo",
+          ]);
 
-      if (photoUrl) {
-        row.getCell(7).value = {
-          text: "Voir le bon",
-          hyperlink: photoUrl,
-        };
-        row.getCell(7).font = {
-          color: { argb: "FF2563EB" },
-          underline: true,
-        };
-      }
+        row.height = 24;
 
-      row.eachCell((cell) => {
-        cell.alignment = {
-          vertical: "middle",
-          horizontal:
-            cell.col === 2 || cell.col === 6 ? "left" : "center",
-        };
+        row.getCell(4).numFmt =
+          '#,##0.00 "L"';
 
-        cell.border = {
-          top: { style: "thin", color: { argb: "FFE2E8F0" } },
-          left: { style: "thin", color: { argb: "FFE2E8F0" } },
-          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
-          right: { style: "thin", color: { argb: "FFE2E8F0" } },
-        };
+        row.getCell(5).numFmt =
+          '#,##0.00 "DH"';
 
-        if (index % 2 === 1) {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFF8FAFC" },
+        if (photoUrl) {
+          row.getCell(8).value = {
+            text: "Voir le bon",
+            hyperlink: photoUrl,
+          };
+
+          row.getCell(8).font = {
+            color: {
+              argb: "FF0563C1",
+            },
+            underline: true,
           };
         }
-      });
-    });
 
-    const totalRow = worksheet.addRow([
-      "TOTAL JOUR",
-      "",
-      totalLitres,
-      "",
-      totalPrix,
-      "",
-      "",
-      "",
-    ]);
+        row.eachCell((cell) => {
+          cell.alignment = {
+            vertical: "middle",
+            horizontal:
+              cell.col === 6 ||
+              cell.col === 7
+                ? "left"
+                : "center",
+            wrapText: true,
+          };
+
+          cell.border = {
+            top: {
+              style: "thin",
+              color: {
+                argb: "FFD9E2F3",
+              },
+            },
+            left: {
+              style: "thin",
+              color: {
+                argb: "FFD9E2F3",
+              },
+            },
+            bottom: {
+              style: "thin",
+              color: {
+                argb: "FFD9E2F3",
+              },
+            },
+            right: {
+              style: "thin",
+              color: {
+                argb: "FFD9E2F3",
+              },
+            },
+          };
+
+          if (index % 2 === 1) {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: {
+                argb: "FFF4F7FB",
+              },
+            };
+          }
+        });
+      }
+    );
+
+    const totalRow =
+      worksheet.addRow([
+        "Total",
+        "",
+        "",
+        totalLitres,
+        totalPrix,
+        "",
+        "",
+        "",
+      ]);
+
+    totalRow.height = 26;
 
     totalRow.eachCell((cell) => {
       cell.font = {
         bold: true,
-        color: { argb: "FF172554" },
+        color: {
+          argb: "FF17365D",
+        },
       };
+
       cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FFDBEAFE" },
+        fgColor: {
+          argb: "FFD9EAF7",
+        },
+      };
+
+      cell.alignment = {
+        vertical: "middle",
+        horizontal:
+          cell.col === 1
+            ? "left"
+            : "center",
+      };
+
+      cell.border = {
+        top: {
+          style: "medium",
+          color: {
+            argb: "FF4472C4",
+          },
+        },
+        bottom: {
+          style: "thin",
+          color: {
+            argb: "FF4472C4",
+          },
+        },
       };
     });
 
-    totalRow.getCell(3).numFmt = '#,##0.00 "L"';
-    totalRow.getCell(5).numFmt = '#,##0.00 "DH"';
+    totalRow.getCell(4).numFmt =
+      '#,##0.00 "L"';
+
+    totalRow.getCell(5).numFmt =
+      '#,##0.00 "DH"';
 
     worksheet.columns = [
-      { width: 16 },
-      { width: 32 },
-      { width: 16 },
-      { width: 18 },
-      { width: 20 },
-      { width: 30 },
-      { width: 18 },
-      { width: 16 },
+      {
+        width: 15,
+      },
+      {
+        width: 22,
+      },
+      {
+        width: 16,
+      },
+      {
+        width: 15,
+      },
+      {
+        width: 18,
+      },
+      {
+        width: 28,
+      },
+      {
+        width: 30,
+      },
+      {
+        width: 18,
+      },
     ];
+
+    worksheet.autoFilter = {
+      from: "A5",
+      to: "H5",
+    };
 
     worksheet.pageSetup = {
       orientation: "landscape",
@@ -1233,20 +1422,15 @@ function App() {
       },
     };
 
-    worksheet.autoFilter = {
-      from: "A7",
-      to: "H7",
-    };
-
-    const buffer = await workbook.xlsx.writeBuffer();
-
-    const fileDate = selectedDate.split("-").reverse().join("-");
+    const buffer =
+      await workbook.xlsx.writeBuffer();
 
     saveAs(
       new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
-      `Suivi_Gasoil_${fileDate}.xlsx`
+      `Etat_Prise_Gasoil_${fileDate}.xlsx`
     );
   };
 
@@ -1475,7 +1659,10 @@ function App() {
           <section className="overflow-hidden rounded-3xl border border-white bg-white shadow-xl shadow-slate-200/60">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
-                <h3 className="text-xl font-black">Bons du jour</h3>
+                <h3 className="text-xl font-black">
+                  Bons du jour
+                </h3>
+
                 <p className="mt-1 text-sm text-slate-500">
                   {dayRecords.length} enregistrement(s)
                 </p>
@@ -1489,7 +1676,9 @@ function App() {
 
                 <input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) =>
+                    setSearch(e.target.value)
+                  }
                   placeholder="Rechercher..."
                   className="w-full rounded-xl bg-slate-100 py-3 pl-10 pr-4 outline-none focus:ring-4 focus:ring-blue-100"
                 />
@@ -1504,113 +1693,186 @@ function App() {
               <EmptyBlock />
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full">
+                <table className="min-w-[1180px] w-full">
                   <thead className="bg-slate-50">
                     <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                      <th className="px-6 py-4">Autocar</th>
-                      <th className="px-6 py-4">Départ</th>
-                      <th className="px-6 py-4">Quantité</th>
-                      <th className="px-6 py-4">Bon</th>
-                      <th className="px-6 py-4">Prix</th>
-                      <th className="px-6 py-4">Photo</th>
-                      <th className="px-6 py-4"></th>
+                      <th className="px-5 py-4">
+                        Date
+                      </th>
+
+                      <th className="px-5 py-4">
+                        N° Bon
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Autocar
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Départ
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Quantité
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Prix total
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Photo
+                      </th>
+
+                      <th className="px-5 py-4 text-center">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-                    {filteredRecords.map((item) => {
-                      return (
+                    {filteredRecords.map(
+                      (item) => (
                         <tr
                           key={item._id}
                           className="transition hover:bg-blue-50/40"
                         >
-                          <td className="px-6 py-5">
+                          <td className="whitespace-nowrap px-5 py-5 font-bold text-slate-600">
+                            {formatDate(
+                              item.date
+                            )}
+                          </td>
+
+                          <td className="px-5 py-5">
+                            <span className="inline-flex rounded-lg bg-amber-50 px-3 py-2 font-black text-amber-700">
+                              {
+                                item.numeroBon
+                              }
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-5">
                             <span className="inline-flex rounded-xl bg-blue-50 px-3 py-2 font-black text-blue-700">
-                              {item.autocar}
+                              {
+                                item.autocar
+                              }
                             </span>
                           </td>
 
-                          <td className="px-6 py-5 font-bold">{item.depart}</td>
+                          <td className="px-5 py-5 font-bold">
+                            {item.depart}
+                          </td>
 
-                          <td className="px-6 py-5">
+                          <td className="whitespace-nowrap px-5 py-5">
                             <span className="text-lg font-black">
-                              {formatNumber(item.quantite)} L
+                              {formatNumber(
+                                item.quantite
+                              )}{" "}
+                              L
                             </span>
                           </td>
 
-                          <td className="px-6 py-5">
-                            <span className="rounded-lg bg-amber-50 px-3 py-2 font-bold text-amber-700">
-                              {item.numeroBon}
-                            </span>
+                          <td className="whitespace-nowrap px-5 py-5 text-lg font-black">
+                            {formatMoney(
+                              item.prixTotal
+                            )}{" "}
+                            DH
                           </td>
 
-                          <td className="px-6 py-5 font-black">
-                            {formatMoney(item.prixTotal)} DH
-                          </td>
-
-                          <td className="px-6 py-5">
+                          <td className="px-5 py-5">
                             {item.imageBon ? (
                               <a
-                                href={resolveFileUrl(item.imageBon)}
+                                href={resolveFileUrl(
+                                  item.imageBon
+                                )}
                                 target="_blank"
                                 rel="noreferrer"
+                                title="Ouvrir le bon en taille réelle"
                               >
                                 <img
-                                  src={thumbnailUrl(item.imageBon)}
+                                  src={cloudinaryImageUrl(
+                                    item.imageBon,
+                                    {
+                                      width: 320,
+                                      quality:
+                                        "auto:eco",
+                                    }
+                                  )}
+                                  alt={`Bon ${item.numeroBon}`}
                                   loading="lazy"
                                   decoding="async"
-                                  alt={`Bon ${item.numeroBon}`}
                                   className="h-14 w-20 rounded-xl border border-slate-200 object-cover shadow-sm"
                                 />
                               </a>
                             ) : (
                               <div className="flex h-14 w-20 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                                <ImageIcon size={20} />
+                                <ImageIcon
+                                  size={20}
+                                />
                               </div>
                             )}
                           </td>
 
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-2">
+                          <td className="px-5 py-5">
+                            <div className="flex items-center justify-center gap-2">
                               <button
-                                onClick={() => openEditForm(item)}
+                                onClick={() =>
+                                  openEditForm(
+                                    item
+                                  )
+                                }
                                 title="Modifier"
                                 className="rounded-xl bg-blue-50 p-2.5 text-blue-600 transition hover:bg-blue-100"
                               >
-                                <Pencil size={17} />
+                                <Pencil
+                                  size={17}
+                                />
                               </button>
 
                               <button
-                                onClick={() => handleDelete(item._id)}
+                                onClick={() =>
+                                  handleDelete(
+                                    item._id
+                                  )
+                                }
                                 title="Supprimer"
                                 className="rounded-xl bg-red-50 p-2.5 text-red-500 transition hover:bg-red-100"
                               >
-                                <Trash2 size={17} />
+                                <Trash2
+                                  size={17}
+                                />
                               </button>
                             </div>
                           </td>
                         </tr>
-                      );
-                    })}
+                      )
+                    )}
                   </tbody>
 
                   <tfoot>
                     <tr className="bg-gradient-to-r from-slate-50 to-blue-50 font-black">
-                      <td colSpan="2" className="px-6 py-5 text-lg">
+                      <td
+                        colSpan="4"
+                        className="px-5 py-5 text-lg"
+                      >
                         Total journée
                       </td>
 
-                      <td className="px-6 py-5 text-lg text-blue-700">
-                        {formatNumber(totalLitres)} L
+                      <td className="px-5 py-5 text-lg text-blue-700">
+                        {formatNumber(
+                          totalLitres
+                        )}{" "}
+                        L
                       </td>
 
-                      <td colSpan="1"></td>
-
-                      <td className="px-6 py-5 text-lg text-blue-700">
-                        {formatMoney(totalPrix)} DH
+                      <td className="px-5 py-5 text-lg text-blue-700">
+                        {formatMoney(
+                          totalPrix
+                        )}{" "}
+                        DH
                       </td>
 
-                      <td colSpan="2"></td>
+                      <td colSpan="2" />
                     </tr>
                   </tfoot>
                 </table>
@@ -2842,9 +3104,13 @@ function AdvancePage({
                       className="group"
                     >
                       <img
-                        src={thumbnailUrl(activeAdvance.imageCheque)}
-                        loading="lazy"
-                        decoding="async"
+                        src={cloudinaryImageUrl(
+                          activeAdvance.imageCheque,
+                          {
+                            width: 640,
+                            quality: "auto:eco",
+                          }
+                        )}
                         alt="Chèque d'avance"
                         className="h-28 w-44 rounded-2xl border border-white/20 object-cover shadow-xl transition group-hover:scale-[1.03]"
                       />
@@ -2996,9 +3262,13 @@ function AdvancePage({
                           rel="noreferrer"
                         >
                           <img
-                            src={thumbnailUrl(avance.imageCheque)}
-                            loading="lazy"
-                            decoding="async"
+                            src={cloudinaryImageUrl(
+                              avance.imageCheque,
+                              {
+                                width: 480,
+                                quality: "auto:eco",
+                              }
+                            )}
                             alt={`Chèque ${avance.numeroCheque}`}
                             className="h-12 w-20 rounded-lg border border-slate-200 object-cover"
                           />
