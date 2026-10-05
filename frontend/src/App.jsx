@@ -1096,432 +1096,1104 @@ function App() {
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Suivi Gasoil Autocar";
+    workbook.company = "Suivi Gasoil Autocar";
+    workbook.subject = "Suivi quotidien des prises gasoil";
     workbook.created = new Date();
 
-    const fileDate = selectedDate.split("-").reverse().join("-");
+    const fileDate =
+      selectedDate
+        .split("-")
+        .reverse()
+        .join("-");
+
+    const displayDate =
+      selectedDate
+        .split("-")
+        .reverse()
+        .join("/");
+
     const stationName =
       activeAdvance?.station?.trim() ||
       "STATION EXTERNE";
 
-    const unitPrices = dayRecords
-      .map((item) => {
-        const quantity = Number(item.quantite || 0);
-        const total = Number(item.prixTotal || 0);
+    // ========================================================
+    // UNIT PRICE ANALYSIS
+    // ========================================================
 
-        return quantity > 0 && total > 0
-          ? total / quantity
-          : null;
-      })
-      .filter((value) => Number.isFinite(value));
+    const unitPriceGroups = new Map();
 
-    const stationUnitPrice =
-      unitPrices.length > 0
-        ? unitPrices[0]
-        : DEFAULT_UNIT_PRICE;
+    dayRecords.forEach((item) => {
+      const quantity =
+        Number(item.quantite || 0);
 
-    const hasVariableUnitPrice =
-      unitPrices.some(
-        (value) =>
-          Math.abs(value - stationUnitPrice) > 0.005
+      const total =
+        Number(item.prixTotal || 0);
+
+      if (
+        !Number.isFinite(quantity) ||
+        quantity <= 0 ||
+        !Number.isFinite(total) ||
+        total <= 0
+      ) {
+        return;
+      }
+
+      const unitPrice =
+        Number(
+          (
+            total /
+            quantity
+          ).toFixed(2)
+        );
+
+      const key =
+        unitPrice.toFixed(2);
+
+      if (!unitPriceGroups.has(key)) {
+        unitPriceGroups.set(
+          key,
+          {
+            price: unitPrice,
+            bons: [],
+          }
+        );
+      }
+
+      unitPriceGroups
+        .get(key)
+        .bons.push(
+          item.numeroBon ||
+            "Sans numéro"
+        );
+    });
+
+    const groupedUnitPrices =
+      Array.from(
+        unitPriceGroups.values()
+      ).sort(
+        (a, b) =>
+          a.price - b.price
       );
 
-    const worksheet = workbook.addWorksheet(
-      fileDate,
-      {
-        views: [
-          {
-            state: "frozen",
-            ySplit: 5,
+    const hasVariableUnitPrice =
+      groupedUnitPrices.length > 1;
+
+    const singleUnitPrice =
+      groupedUnitPrices.length === 1
+        ? groupedUnitPrices[0].price
+        : null;
+
+    const priceSummaryRows =
+      hasVariableUnitPrice
+        ? groupedUnitPrices.length
+        : 1;
+
+    const tableHeaderRow =
+      10 + priceSummaryRows;
+
+    const firstDataRow =
+      tableHeaderRow + 1;
+
+    const lastDataRow =
+      firstDataRow +
+      dayRecords.length -
+      1;
+
+    const totalRowNumber =
+      lastDataRow + 1;
+
+    const footerRowNumber =
+      totalRowNumber + 2;
+
+    const worksheet =
+      workbook.addWorksheet(
+        fileDate,
+        {
+          views: [
+            {
+              state: "frozen",
+              ySplit:
+                tableHeaderRow,
+            },
+          ],
+          properties: {
+            defaultRowHeight: 20,
           },
-        ],
-      }
+        }
+      );
+
+    // ========================================================
+    // PREMIUM COLOR SYSTEM
+    // ========================================================
+
+    const NAVY = "FF0F172A";
+    const NAVY_2 = "FF172554";
+    const BLUE = "FF2563EB";
+    const BLUE_2 = "FF1D4ED8";
+    const SKY = "FFEFF6FF";
+    const EMERALD = "FF059669";
+    const EMERALD_BG = "FFECFDF5";
+    const AMBER = "FFD97706";
+    const AMBER_BG = "FFFFF7ED";
+    const VIOLET = "FF7C3AED";
+    const VIOLET_BG = "FFF5F3FF";
+    const SLATE = "FF475569";
+    const SLATE_LIGHT = "FFF8FAFC";
+    const BORDER = "FFD7E0EA";
+    const WHITE = "FFFFFFFF";
+
+    const setThinBorder =
+      (cell, color = BORDER) => {
+        cell.border = {
+          top: {
+            style: "thin",
+            color: { argb: color },
+          },
+          left: {
+            style: "thin",
+            color: { argb: color },
+          },
+          bottom: {
+            style: "thin",
+            color: { argb: color },
+          },
+          right: {
+            style: "thin",
+            color: { argb: color },
+          },
+        };
+      };
+
+    const fillCell =
+      (cell, argb) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb },
+        };
+      };
+
+    // ========================================================
+    // TITLE
+    // ========================================================
+
+    worksheet.mergeCells(
+      "A1:H1"
     );
 
-    // ========================================================
-    // HEADER - inspired by the station's original workbook
-    // ========================================================
-
-    worksheet.mergeCells("A1:J1");
-
-    const titleCell = worksheet.getCell("A1");
+    const titleCell =
+      worksheet.getCell("A1");
 
     titleCell.value =
-      `Etat des prises Gasoil à la Station ${stationName}\n` +
-      `Date : ${fileDate.replaceAll("-", "/")}`;
+      "SUIVI GASOIL AUTOCAR";
 
     titleCell.font = {
-      name: "Arial",
-      size: 16,
+      name: "Aptos Display",
+      size: 22,
       bold: true,
       color: {
-        argb: "FFFFFFFF",
+        argb: WHITE,
       },
     };
 
     titleCell.alignment = {
-      horizontal: "center",
+      horizontal: "left",
       vertical: "middle",
-      wrapText: true,
     };
 
-    titleCell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: {
-        argb: "FF17365D",
-      },
-    };
+    fillCell(
+      titleCell,
+      NAVY
+    );
 
-    worksheet.getRow(1).height = 42;
+    worksheet.getRow(1).height =
+      38;
 
-    worksheet.mergeCells("A3:B3");
+    worksheet.mergeCells(
+      "A2:H2"
+    );
 
-    worksheet.getCell("A3").value =
-      hasVariableUnitPrice
-        ? "Prix unitaire : variable selon le bon"
-        : "Prix unitaire affiché à la station :";
+    const subtitleCell =
+      worksheet.getCell("A2");
 
-    worksheet.getCell("A3").font = {
-      name: "Arial",
-      size: 11,
+    subtitleCell.value =
+      `État des prises gasoil • ${stationName} • ${displayDate}`;
+
+    subtitleCell.font = {
+      name: "Aptos",
+      size: 12,
       bold: true,
       color: {
-        argb: "FF1F2937",
+        argb: "FFBFDBFE",
       },
     };
 
-    worksheet.getCell("C3").value =
-      hasVariableUnitPrice
-        ? "Variable"
-        : stationUnitPrice;
-
-    if (!hasVariableUnitPrice) {
-      worksheet.getCell("C3").numFmt =
-        '#,##0.00 "DH/L"';
-    }
-
-    worksheet.getCell("C3").font = {
-      name: "Arial",
-      size: 11,
-      bold: true,
-      color: {
-        argb: "FF17365D",
-      },
+    subtitleCell.alignment = {
+      horizontal: "left",
+      vertical: "middle",
     };
 
-    worksheet.mergeCells("F3:G3");
+    fillCell(
+      subtitleCell,
+      NAVY_2
+    );
 
-    worksheet.getCell("F3").value =
-      "Nombre de bons :";
-
-    worksheet.getCell("F3").font = {
-      bold: true,
-      color: {
-        argb: "FF1F2937",
-      },
-    };
-
-    worksheet.getCell("H3").value =
-      dayRecords.length;
-
-    worksheet.getCell("H3").font = {
-      bold: true,
-      color: {
-        argb: "FF17365D",
-      },
-    };
+    worksheet.getRow(2).height =
+      25;
 
     // ========================================================
-    // TABLE
-    // First 5 columns follow the original station workbook
+    // PREMIUM KPI CARDS
+    // ========================================================
+
+    const kpis = [
+      {
+        range: "A4:B4",
+        valueRange: "A5:B5",
+        label: "BONS DU JOUR",
+        value: `${dayRecords.length}`,
+        bg: SKY,
+        color: BLUE_2,
+      },
+      {
+        range: "C4:D4",
+        valueRange: "C5:D5",
+        label: "QUANTITÉ TOTALE",
+        value: `${formatNumber(totalLitres)} L`,
+        bg: EMERALD_BG,
+        color: EMERALD,
+      },
+      {
+        range: "E4:F4",
+        valueRange: "E5:F5",
+        label: "MONTANT TOTAL",
+        value: `${formatMoney(totalPrix)} DH`,
+        bg: VIOLET_BG,
+        color: VIOLET,
+      },
+      {
+        range: "G4:H4",
+        valueRange: "G5:H5",
+        label: "SOLDE AVANCE",
+        value: activeAdvance
+          ? `${formatMoney(
+              activeAdvance.solde
+            )} DH`
+          : "—",
+        bg: AMBER_BG,
+        color: AMBER,
+      },
+    ];
+
+    kpis.forEach((kpi) => {
+      worksheet.mergeCells(
+        kpi.range
+      );
+
+      worksheet.mergeCells(
+        kpi.valueRange
+      );
+
+      const labelCell =
+        worksheet.getCell(
+          kpi.range.split(":")[0]
+        );
+
+      const valueCell =
+        worksheet.getCell(
+          kpi.valueRange.split(":")[0]
+        );
+
+      labelCell.value =
+        kpi.label;
+
+      labelCell.font = {
+        name: "Aptos",
+        size: 9,
+        bold: true,
+        color: {
+          argb: SLATE,
+        },
+      };
+
+      labelCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+      valueCell.value =
+        kpi.value;
+
+      valueCell.font = {
+        name: "Aptos Display",
+        size: 15,
+        bold: true,
+        color: {
+          argb: kpi.color,
+        },
+      };
+
+      valueCell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+
+      fillCell(
+        labelCell,
+        kpi.bg
+      );
+
+      fillCell(
+        valueCell,
+        kpi.bg
+      );
+
+      setThinBorder(
+        labelCell
+      );
+
+      setThinBorder(
+        valueCell
+      );
+    });
+
+    worksheet.getRow(4).height =
+      22;
+
+    worksheet.getRow(5).height =
+      28;
+
+    // ========================================================
+    // UNIT PRICE PANEL
+    // ========================================================
+
+    worksheet.mergeCells(
+      "A7:H7"
+    );
+
+    const priceHeaderCell =
+      worksheet.getCell("A7");
+
+    priceHeaderCell.value =
+      hasVariableUnitPrice
+        ? "PRIX UNITAIRES UTILISÉS"
+        : "PRIX UNITAIRE AFFICHÉ À LA STATION";
+
+    priceHeaderCell.font = {
+      name: "Aptos",
+      size: 10,
+      bold: true,
+      color: {
+        argb: WHITE,
+      },
+    };
+
+    priceHeaderCell.alignment = {
+      horizontal: "left",
+      vertical: "middle",
+    };
+
+    fillCell(
+      priceHeaderCell,
+      BLUE_2
+    );
+
+    worksheet.getRow(7).height =
+      24;
+
+    if (
+      !hasVariableUnitPrice
+    ) {
+      worksheet.mergeCells(
+        "A8:D8"
+      );
+
+      worksheet.mergeCells(
+        "E8:H8"
+      );
+
+      const labelCell =
+        worksheet.getCell("A8");
+
+      const valueCell =
+        worksheet.getCell("E8");
+
+      labelCell.value =
+        "Prix appliqué à tous les bons";
+
+      valueCell.value =
+        singleUnitPrice ??
+        DEFAULT_UNIT_PRICE;
+
+      valueCell.numFmt =
+        '#,##0.00 "DH/L"';
+
+      labelCell.font = {
+        name: "Aptos",
+        size: 10,
+        bold: true,
+        color: {
+          argb: SLATE,
+        },
+      };
+
+      valueCell.font = {
+        name: "Aptos Display",
+        size: 14,
+        bold: true,
+        color: {
+          argb: AMBER,
+        },
+      };
+
+      labelCell.alignment = {
+        vertical: "middle",
+        horizontal: "left",
+      };
+
+      valueCell.alignment = {
+        vertical: "middle",
+        horizontal: "right",
+      };
+
+      fillCell(
+        labelCell,
+        AMBER_BG
+      );
+
+      fillCell(
+        valueCell,
+        AMBER_BG
+      );
+
+      setThinBorder(
+        labelCell
+      );
+
+      setThinBorder(
+        valueCell
+      );
+
+      worksheet.getRow(8).height =
+        28;
+    } else {
+      groupedUnitPrices.forEach(
+        (group, index) => {
+          const rowNumber =
+            8 + index;
+
+          worksheet.mergeCells(
+            `A${rowNumber}:B${rowNumber}`
+          );
+
+          worksheet.mergeCells(
+            `C${rowNumber}:H${rowNumber}`
+          );
+
+          const priceCell =
+            worksheet.getCell(
+              `A${rowNumber}`
+            );
+
+          const bonsCell =
+            worksheet.getCell(
+              `C${rowNumber}`
+            );
+
+          priceCell.value =
+            group.price;
+
+          priceCell.numFmt =
+            '#,##0.00 "DH/L"';
+
+          bonsCell.value =
+            `Bons : ${group.bons.join(
+              ", "
+            )}`;
+
+          priceCell.font = {
+            name: "Aptos Display",
+            size: 11,
+            bold: true,
+            color: {
+              argb: AMBER,
+            },
+          };
+
+          bonsCell.font = {
+            name: "Aptos",
+            size: 10,
+            bold: true,
+            color: {
+              argb: NAVY,
+            },
+          };
+
+          priceCell.alignment = {
+            vertical: "middle",
+            horizontal: "center",
+          };
+
+          bonsCell.alignment = {
+            vertical: "middle",
+            horizontal: "left",
+            wrapText: true,
+          };
+
+          fillCell(
+            priceCell,
+            AMBER_BG
+          );
+
+          fillCell(
+            bonsCell,
+            AMBER_BG
+          );
+
+          setThinBorder(
+            priceCell
+          );
+
+          setThinBorder(
+            bonsCell
+          );
+
+          worksheet.getRow(
+            rowNumber
+          ).height = 26;
+        }
+      );
+    }
+
+    // ========================================================
+    // TABLE - EXACT BUSINESS ORDER REQUESTED
+    // Date | Bon | Autocar | Départ | Quantité | Prix total |
+    // Photo | Saisi par
     // ========================================================
 
     const headerRow =
-      worksheet.getRow(5);
+      worksheet.getRow(
+        tableHeaderRow
+      );
 
     headerRow.values = [
       "Date",
-      "N° de bon de sortie",
-      "N° véhicule",
+      "N° Bon",
+      "Autocar",
+      "Départ",
       "Quantité",
       "Prix total",
-      "Départ",
-      "Observation",
-      "Photo du bon",
+      "Photo",
       "Saisi par",
-      "Modifié par",
     ];
 
     headerRow.height = 30;
 
-    headerRow.eachCell((cell) => {
-      cell.font = {
-        name: "Arial",
-        size: 10,
-        bold: true,
-        color: {
-          argb: "FFFFFFFF",
-        },
+    headerRow.eachCell(
+      (cell) => {
+        cell.font = {
+          name: "Aptos",
+          size: 10,
+          bold: true,
+          color: {
+            argb: WHITE,
+          },
+        };
+
+        fillCell(
+          cell,
+          BLUE
+        );
+
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+          wrapText: true,
+        };
+
+        cell.border = {
+          top: {
+            style: "thin",
+            color: {
+              argb: "FF60A5FA",
+            },
+          },
+          left: {
+            style: "thin",
+            color: {
+              argb: "FF60A5FA",
+            },
+          },
+          bottom: {
+            style: "thin",
+            color: {
+              argb: "FF1E40AF",
+            },
+          },
+          right: {
+            style: "thin",
+            color: {
+              argb: "FF60A5FA",
+            },
+          },
+        };
+      }
+    );
+
+    const arrayBufferToBase64 =
+      (buffer) => {
+        const bytes =
+          new Uint8Array(
+            buffer
+          );
+
+        let binary = "";
+
+        const chunkSize =
+          0x8000;
+
+        for (
+          let offset = 0;
+          offset < bytes.length;
+          offset += chunkSize
+        ) {
+          const chunk =
+            bytes.subarray(
+              offset,
+              Math.min(
+                offset +
+                  chunkSize,
+                bytes.length
+              )
+            );
+
+          binary +=
+            String.fromCharCode(
+              ...chunk
+            );
+        }
+
+        return btoa(binary);
       };
 
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: {
-          argb: "FF4472C4",
+    for (
+      let index = 0;
+      index <
+      dayRecords.length;
+      index += 1
+    ) {
+      const item =
+        dayRecords[index];
+
+      const rowNumber =
+        firstDataRow + index;
+
+      const photoUrl =
+        item.imageBon
+          ? resolveFileUrl(
+              item.imageBon
+            )
+          : "";
+
+      const itemDate =
+        new Date(
+          item.date
+        ).toLocaleDateString(
+          "fr-FR"
+        );
+
+      const creator =
+        auditUserLabel(
+          item,
+          "createdBy"
+        );
+
+      const createdTime =
+        item.createdAt
+          ? formatDateTime(
+              item.createdAt
+            )
+          : "";
+
+      const row =
+        worksheet.getRow(
+          rowNumber
+        );
+
+      row.values = [
+        itemDate,
+        item.numeroBon || "",
+        item.autocar || "",
+        item.depart || "",
+        Number(
+          item.quantite || 0
+        ),
+        Number(
+          item.prixTotal || 0
+        ),
+        photoUrl
+          ? "Voir photo"
+          : "Sans photo",
+        createdTime
+          ? `${creator}\n${createdTime}`
+          : creator,
+      ];
+
+      row.height =
+        photoUrl ? 54 : 34;
+
+      row.getCell(5).numFmt =
+        '#,##0.00 "L"';
+
+      row.getCell(6).numFmt =
+        '#,##0.00 "DH"';
+
+      row.eachCell(
+        (cell) => {
+          cell.font = {
+            name: "Aptos",
+            size: 10,
+            bold:
+              cell.col === 2 ||
+              cell.col === 3,
+            color: {
+              argb:
+                cell.col === 2
+                  ? "FFB45309"
+                  : cell.col === 3
+                    ? BLUE_2
+                    : NAVY,
+            },
+          };
+
+          cell.alignment = {
+            vertical: "middle",
+            horizontal:
+              cell.col === 4 ||
+              cell.col === 8
+                ? "left"
+                : "center",
+            wrapText: true,
+          };
+
+          setThinBorder(
+            cell
+          );
+
+          fillCell(
+            cell,
+            index % 2 === 0
+              ? WHITE
+              : SLATE_LIGHT
+          );
+        }
+      );
+
+      // Accent cells
+      fillCell(
+        row.getCell(2),
+        "FFFFFBEB"
+      );
+
+      fillCell(
+        row.getCell(3),
+        SKY
+      );
+
+      // Photo hyperlink + embedded preview
+      if (photoUrl) {
+        row.getCell(7).value = {
+          text: "Ouvrir",
+          hyperlink:
+            photoUrl,
+        };
+
+        row.getCell(7).font = {
+          name: "Aptos",
+          size: 9,
+          bold: true,
+          color: {
+            argb: BLUE_2,
+          },
+          underline: true,
+        };
+
+        row.getCell(7).alignment = {
+          vertical: "bottom",
+          horizontal: "center",
+        };
+
+        try {
+          const previewUrl =
+            cloudinaryImageUrl(
+              item.imageBon,
+              {
+                width: 240,
+                quality:
+                  "auto:eco",
+              }
+            );
+
+          const imageResponse =
+            await fetch(
+              previewUrl
+            );
+
+          if (
+            imageResponse.ok
+          ) {
+            const blob =
+              await imageResponse.blob();
+
+            const arrayBuffer =
+              await blob.arrayBuffer();
+
+            const mimeType =
+              blob.type ||
+              "image/jpeg";
+
+            const extension =
+              mimeType.includes(
+                "png"
+              )
+                ? "png"
+                : "jpeg";
+
+            const base64 =
+              arrayBufferToBase64(
+                arrayBuffer
+              );
+
+            const imageId =
+              workbook.addImage(
+                {
+                  base64:
+                    `data:${mimeType};base64,${base64}`,
+                  extension,
+                }
+              );
+
+            worksheet.addImage(
+              imageId,
+              {
+                tl: {
+                  col: 6.15,
+                  row:
+                    rowNumber -
+                    0.88,
+                },
+                ext: {
+                  width: 58,
+                  height: 42,
+                },
+                editAs:
+                  "oneCell",
+              }
+            );
+          }
+        } catch (error) {
+          console.warn(
+            "Photo Excel non intégrée :",
+            error
+          );
+        }
+      }
+    }
+
+    // ========================================================
+    // TOTAL ROW
+    // ========================================================
+
+    worksheet.mergeCells(
+      `A${totalRowNumber}:D${totalRowNumber}`
+    );
+
+    const totalLabel =
+      worksheet.getCell(
+        `A${totalRowNumber}`
+      );
+
+    totalLabel.value =
+      "TOTAL JOURNÉE";
+
+    totalLabel.font = {
+      name: "Aptos Display",
+      size: 12,
+      bold: true,
+      color: {
+        argb: WHITE,
+      },
+    };
+
+    totalLabel.alignment = {
+      horizontal: "left",
+      vertical: "middle",
+    };
+
+    fillCell(
+      totalLabel,
+      NAVY_2
+    );
+
+    setThinBorder(
+      totalLabel,
+      NAVY_2
+    );
+
+    const totalQuantityCell =
+      worksheet.getCell(
+        `E${totalRowNumber}`
+      );
+
+    totalQuantityCell.value = {
+      formula:
+        `SUM(E${firstDataRow}:E${lastDataRow})`,
+      result:
+        totalLitres,
+    };
+
+    totalQuantityCell.numFmt =
+      '#,##0.00 "L"';
+
+    const totalAmountCell =
+      worksheet.getCell(
+        `F${totalRowNumber}`
+      );
+
+    totalAmountCell.value = {
+      formula:
+        `SUM(F${firstDataRow}:F${lastDataRow})`,
+      result:
+        totalPrix,
+    };
+
+    totalAmountCell.numFmt =
+      '#,##0.00 "DH"';
+
+    [
+      totalQuantityCell,
+      totalAmountCell,
+    ].forEach((cell) => {
+      cell.font = {
+        name: "Aptos Display",
+        size: 12,
+        bold: true,
+        color: {
+          argb: WHITE,
         },
       };
 
       cell.alignment = {
         horizontal: "center",
         vertical: "middle",
-        wrapText: true,
       };
 
-      cell.border = {
-        top: {
-          style: "thin",
-          color: {
-            argb: "FF8EA9DB",
-          },
-        },
-        left: {
-          style: "thin",
-          color: {
-            argb: "FF8EA9DB",
-          },
-        },
-        bottom: {
-          style: "thin",
-          color: {
-            argb: "FF8EA9DB",
-          },
-        },
-        right: {
-          style: "thin",
-          color: {
-            argb: "FF8EA9DB",
-          },
-        },
-      };
+      fillCell(
+        cell,
+        BLUE_2
+      );
+
+      setThinBorder(
+        cell,
+        BLUE_2
+      );
     });
 
-    dayRecords.forEach(
-      (item, index) => {
-        const photoUrl =
-          item.imageBon
-            ? resolveFileUrl(
-                item.imageBon
-              )
-            : "";
-
-        const itemDate =
-          new Date(
-            item.date
-          ).toLocaleDateString(
-            "fr-FR"
-          );
-
-        const row =
-          worksheet.addRow([
-            itemDate,
-            item.numeroBon,
-            item.autocar,
-            Number(
-              item.quantite || 0
-            ),
-            Number(
-              item.prixTotal || 0
-            ),
-            item.depart || "",
-            item.observation || "",
-            photoUrl
-              ? "Voir le bon"
-              : "Sans photo",
-            auditUserLabel(
-              item,
-              "createdBy"
-            ),
-            item.updatedBy ||
-            item.updatedByName ||
-            item.updatedByMatricule ||
-            item.updatedByEmail
-              ? auditUserLabel(
-                  item,
-                  "updatedBy"
-                )
-              : "—",
-          ]);
-
-        row.height = 24;
-
-        row.getCell(4).numFmt =
-          '#,##0.00 "L"';
-
-        row.getCell(5).numFmt =
-          '#,##0.00 "DH"';
-
-        if (photoUrl) {
-          row.getCell(8).value = {
-            text: "Voir le bon",
-            hyperlink: photoUrl,
-          };
-
-          row.getCell(8).font = {
-            color: {
-              argb: "FF0563C1",
-            },
-            underline: true,
-          };
-        }
-
-        row.eachCell((cell) => {
-          cell.alignment = {
-            vertical: "middle",
-            horizontal:
-              cell.col === 6 ||
-              cell.col === 7
-                ? "left"
-                : "center",
-            wrapText: true,
-          };
-
-          cell.border = {
-            top: {
-              style: "thin",
-              color: {
-                argb: "FFD9E2F3",
-              },
-            },
-            left: {
-              style: "thin",
-              color: {
-                argb: "FFD9E2F3",
-              },
-            },
-            bottom: {
-              style: "thin",
-              color: {
-                argb: "FFD9E2F3",
-              },
-            },
-            right: {
-              style: "thin",
-              color: {
-                argb: "FFD9E2F3",
-              },
-            },
-          };
-
-          if (index % 2 === 1) {
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: {
-                argb: "FFF4F7FB",
-              },
-            };
-          }
-        });
-      }
+    worksheet.mergeCells(
+      `G${totalRowNumber}:H${totalRowNumber}`
     );
 
-    const totalRow =
-      worksheet.addRow([
-        "Total",
-        "",
-        "",
-        totalLitres,
-        totalPrix,
-        "",
-        "",
-        "",
-      ]);
+    const totalBonsCell =
+      worksheet.getCell(
+        `G${totalRowNumber}`
+      );
 
-    totalRow.height = 26;
+    totalBonsCell.value =
+      `${dayRecords.length} bon${
+        dayRecords.length > 1
+          ? "s"
+          : ""
+      }`;
 
-    totalRow.eachCell((cell) => {
-      cell.font = {
-        bold: true,
-        color: {
-          argb: "FF17365D",
-        },
-      };
+    totalBonsCell.font = {
+      name: "Aptos",
+      size: 10,
+      bold: true,
+      color: {
+        argb: NAVY_2,
+      },
+    };
 
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: {
-          argb: "FFD9EAF7",
-        },
-      };
+    totalBonsCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
 
-      cell.alignment = {
-        vertical: "middle",
-        horizontal:
-          cell.col === 1
-            ? "left"
-            : "center",
-      };
+    fillCell(
+      totalBonsCell,
+      SKY
+    );
 
-      cell.border = {
-        top: {
-          style: "medium",
-          color: {
-            argb: "FF4472C4",
-          },
-        },
-        bottom: {
-          style: "thin",
-          color: {
-            argb: "FF4472C4",
-          },
-        },
-      };
-    });
+    setThinBorder(
+      totalBonsCell,
+      BLUE
+    );
 
-    totalRow.getCell(4).numFmt =
-      '#,##0.00 "L"';
+    worksheet.getRow(
+      totalRowNumber
+    ).height = 30;
 
-    totalRow.getCell(5).numFmt =
-      '#,##0.00 "DH"';
+    // ========================================================
+    // FOOTER
+    // ========================================================
+
+    worksheet.mergeCells(
+      `A${footerRowNumber}:H${footerRowNumber}`
+    );
+
+    const footerCell =
+      worksheet.getCell(
+        `A${footerRowNumber}`
+      );
+
+    footerCell.value =
+      `Suivi Gasoil Autocar • Export généré le ${new Date().toLocaleString(
+        "fr-FR"
+      )}`;
+
+    footerCell.font = {
+      name: "Aptos",
+      size: 9,
+      italic: true,
+      color: {
+        argb: "FF94A3B8",
+      },
+    };
+
+    footerCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    // ========================================================
+    // COLUMN WIDTHS / FILTER / PRINT
+    // ========================================================
 
     worksheet.columns = [
-      {
-        width: 15,
-      },
-      {
-        width: 22,
-      },
-      {
-        width: 16,
-      },
-      {
-        width: 15,
-      },
-      {
-        width: 18,
-      },
-      {
-        width: 28,
-      },
-      {
-        width: 30,
-      },
-      {
-        width: 18,
-      },
-      {
-        width: 28,
-      },
-      {
-        width: 28,
-      },
+      { width: 15 },
+      { width: 18 },
+      { width: 14 },
+      { width: 30 },
+      { width: 16 },
+      { width: 18 },
+      { width: 15 },
+      { width: 34 },
     ];
 
     worksheet.autoFilter = {
-      from: "A5",
-      to: "J5",
+      from:
+        `A${tableHeaderRow}`,
+      to:
+        `H${tableHeaderRow}`,
     };
 
     worksheet.pageSetup = {
@@ -1530,25 +2202,58 @@ function App() {
       fitToPage: true,
       fitToWidth: 1,
       fitToHeight: 0,
+      horizontalCentered: true,
       margins: {
         left: 0.25,
         right: 0.25,
-        top: 0.4,
-        bottom: 0.4,
-        header: 0.2,
-        footer: 0.2,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.15,
+        footer: 0.15,
       },
     };
+
+    worksheet.headerFooter = {
+      oddHeader:
+        `&L&"Aptos,Bold"SUIVI GASOIL AUTOCAR&C${displayDate}&R${stationName}`,
+      oddFooter:
+        '&LConfidentiel&CPage &P / &N&R© Suivi Gasoil Autocar',
+    };
+
+    worksheet.properties.pageSetUpPr =
+      {
+        fitToPage: true,
+      };
+
+    worksheet.eachRow(
+      (row) => {
+        row.eachCell(
+          (cell) => {
+            if (
+              !cell.font?.name
+            ) {
+              cell.font = {
+                ...cell.font,
+                name: "Aptos",
+              };
+            }
+          }
+        );
+      }
+    );
 
     const buffer =
       await workbook.xlsx.writeBuffer();
 
     saveAs(
-      new Blob([buffer], {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }),
-      `Etat_Prise_Gasoil_${fileDate}.xlsx`
+      new Blob(
+        [buffer],
+        {
+          type:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+      ),
+      `Suivi_Gasoil_Premium_${fileDate}.xlsx`
     );
   };
 
