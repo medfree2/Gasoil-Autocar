@@ -61,17 +61,39 @@ const connectDatabase = async () => {
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://gasoil-autocar-hazel.vercel.app",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    if (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app")
+    ) {
+      return true;
+    }
+  } catch (error) {
+    return false;
+  }
+
+  return false;
+};
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
 
