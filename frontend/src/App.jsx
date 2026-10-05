@@ -48,11 +48,18 @@ import {
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-const GASOIL_API = "http://localhost:5000/api/gasoil";
-const AVANCES_API = "http://localhost:5000/api/avances";
-const ACTIVE_AVANCE_API = "http://localhost:5000/api/avances/active";
-const AUTH_API = "http://localhost:5000/api/auth";
-const FILE_URL = "http://localhost:5000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : "");
+
+const FILE_URL =
+  import.meta.env.VITE_FILE_BASE_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : window.location.origin);
+
+const GASOIL_API = `${API_BASE_URL}/api/gasoil`;
+const AVANCES_API = `${API_BASE_URL}/api/avances`;
+const ACTIVE_AVANCE_API = `${API_BASE_URL}/api/avances/active`;
+const AUTH_API = `${API_BASE_URL}/api/auth`;
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
