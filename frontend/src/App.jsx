@@ -1355,32 +1355,20 @@ function App() {
         color: BLUE_2,
       },
       {
-        range: "C4:D4",
-        valueRange: "C5:D5",
+        range: "C4:E4",
+        valueRange: "C5:E5",
         label: "QUANTITÉ TOTALE",
         value: `${formatNumber(totalLitres)} L`,
         bg: EMERALD_BG,
         color: EMERALD,
       },
       {
-        range: "E4:F4",
-        valueRange: "E5:F5",
+        range: "F4:H4",
+        valueRange: "F5:H5",
         label: "MONTANT TOTAL",
         value: `${formatMoney(totalPrix)} DH`,
         bg: VIOLET_BG,
         color: VIOLET,
-      },
-      {
-        range: "G4:H4",
-        valueRange: "G5:H5",
-        label: "SOLDE AVANCE",
-        value: activeAdvance
-          ? `${formatMoney(
-              activeAdvance.solde
-            )} DH`
-          : "—",
-        bg: AMBER_BG,
-        color: AMBER,
       },
     ];
 
@@ -1739,42 +1727,6 @@ function App() {
       }
     );
 
-    const arrayBufferToBase64 =
-      (buffer) => {
-        const bytes =
-          new Uint8Array(
-            buffer
-          );
-
-        let binary = "";
-
-        const chunkSize =
-          0x8000;
-
-        for (
-          let offset = 0;
-          offset < bytes.length;
-          offset += chunkSize
-        ) {
-          const chunk =
-            bytes.subarray(
-              offset,
-              Math.min(
-                offset +
-                  chunkSize,
-                bytes.length
-              )
-            );
-
-          binary +=
-            String.fromCharCode(
-              ...chunk
-            );
-        }
-
-        return btoa(binary);
-      };
-
     for (
       let index = 0;
       index <
@@ -1831,15 +1783,14 @@ function App() {
           item.prixTotal || 0
         ),
         photoUrl
-          ? "Voir photo"
+          ? "Voir bon"
           : "Sans photo",
         createdTime
           ? `${creator}\n${createdTime}`
           : creator,
       ];
 
-      row.height =
-        photoUrl ? 54 : 34;
+      row.height = 34;
 
       row.getCell(5).numFmt =
         '#,##0.00 "L"';
@@ -1899,17 +1850,16 @@ function App() {
         SKY
       );
 
-      // Photo hyperlink + embedded preview
+      // Photo: clean clickable link only (no thumbnail in Excel)
       if (photoUrl) {
         row.getCell(7).value = {
-          text: "Ouvrir",
-          hyperlink:
-            photoUrl,
+          text: "Voir bon",
+          hyperlink: photoUrl,
         };
 
         row.getCell(7).font = {
           name: "Aptos",
-          size: 9,
+          size: 10,
           bold: true,
           color: {
             argb: BLUE_2,
@@ -1918,84 +1868,9 @@ function App() {
         };
 
         row.getCell(7).alignment = {
-          vertical: "bottom",
+          vertical: "middle",
           horizontal: "center",
         };
-
-        try {
-          const previewUrl =
-            cloudinaryImageUrl(
-              item.imageBon,
-              {
-                width: 240,
-                quality:
-                  "auto:eco",
-              }
-            );
-
-          const imageResponse =
-            await fetch(
-              previewUrl
-            );
-
-          if (
-            imageResponse.ok
-          ) {
-            const blob =
-              await imageResponse.blob();
-
-            const arrayBuffer =
-              await blob.arrayBuffer();
-
-            const mimeType =
-              blob.type ||
-              "image/jpeg";
-
-            const extension =
-              mimeType.includes(
-                "png"
-              )
-                ? "png"
-                : "jpeg";
-
-            const base64 =
-              arrayBufferToBase64(
-                arrayBuffer
-              );
-
-            const imageId =
-              workbook.addImage(
-                {
-                  base64:
-                    `data:${mimeType};base64,${base64}`,
-                  extension,
-                }
-              );
-
-            worksheet.addImage(
-              imageId,
-              {
-                tl: {
-                  col: 6.15,
-                  row:
-                    rowNumber -
-                    0.88,
-                },
-                ext: {
-                  width: 58,
-                  height: 42,
-                },
-                editAs:
-                  "oneCell",
-              }
-            );
-          }
-        } catch (error) {
-          console.warn(
-            "Photo Excel non intégrée :",
-            error
-          );
-        }
       }
     }
 
@@ -2185,7 +2060,7 @@ function App() {
       { width: 30 },
       { width: 16 },
       { width: 18 },
-      { width: 15 },
+      { width: 13 },
       { width: 34 },
     ];
 
