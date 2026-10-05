@@ -61,6 +61,8 @@ const AVANCES_API = `${API_BASE_URL}/api/avances`;
 const ACTIVE_AVANCE_API = `${API_BASE_URL}/api/avances/active`;
 const AUTH_API = `${API_BASE_URL}/api/auth`;
 
+const DEFAULT_UNIT_PRICE = 16.37;
+
 const resolveFileUrl = (value) => {
   if (!value) return "";
 
@@ -180,6 +182,7 @@ function App() {
     depart: "",
     quantite: "",
     numeroBon: "",
+    prixUnitaire: String(DEFAULT_UNIT_PRICE),
     prixTotal: "",
     observation: "",
     imageBon: null,
@@ -731,10 +734,39 @@ function App() {
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => {
+      const nextForm = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (
+        name === "quantite" ||
+        name === "prixUnitaire"
+      ) {
+        const quantity = Number(
+          name === "quantite"
+            ? value
+            : prev.quantite
+        );
+
+        const unitPrice = Number(
+          name === "prixUnitaire"
+            ? value
+            : prev.prixUnitaire
+        );
+
+        nextForm.prixTotal =
+          Number.isFinite(quantity) &&
+          quantity > 0 &&
+          Number.isFinite(unitPrice) &&
+          unitPrice > 0
+            ? (quantity * unitPrice).toFixed(2)
+            : "";
+      }
+
+      return nextForm;
+    });
   };
 
   const handleImage = (event) => {
@@ -800,6 +832,13 @@ function App() {
       depart: item.depart || "",
       quantite: item.quantite ?? "",
       numeroBon: item.numeroBon || "",
+      prixUnitaire:
+        Number(item.quantite) > 0
+          ? (
+              Number(item.prixTotal || 0) /
+              Number(item.quantite)
+            ).toFixed(2)
+          : String(DEFAULT_UNIT_PRICE),
       prixTotal: item.prixTotal ?? "",
       observation: item.observation || "",
       imageBon: null,
@@ -1029,10 +1068,27 @@ function App() {
       activeAdvance?.station?.trim() ||
       "STATION EXTERNE";
 
-    const averageUnitPrice =
-      totalLitres > 0
-        ? totalPrix / totalLitres
-        : 0;
+    const unitPrices = dayRecords
+      .map((item) => {
+        const quantity = Number(item.quantite || 0);
+        const total = Number(item.prixTotal || 0);
+
+        return quantity > 0 && total > 0
+          ? total / quantity
+          : null;
+      })
+      .filter((value) => Number.isFinite(value));
+
+    const stationUnitPrice =
+      unitPrices.length > 0
+        ? unitPrices[0]
+        : DEFAULT_UNIT_PRICE;
+
+    const hasVariableUnitPrice =
+      unitPrices.some(
+        (value) =>
+          Math.abs(value - stationUnitPrice) > 0.005
+      );
 
     const worksheet = workbook.addWorksheet(
       fileDate,
@@ -1086,7 +1142,9 @@ function App() {
     worksheet.mergeCells("A3:B3");
 
     worksheet.getCell("A3").value =
-      "Prix moyen calculé à partir des bons :";
+      hasVariableUnitPrice
+        ? "Prix unitaire : variable selon le bon"
+        : "Prix unitaire affiché à la station :";
 
     worksheet.getCell("A3").font = {
       name: "Arial",
@@ -1098,10 +1156,14 @@ function App() {
     };
 
     worksheet.getCell("C3").value =
-      averageUnitPrice;
+      hasVariableUnitPrice
+        ? "Variable"
+        : stationUnitPrice;
 
-    worksheet.getCell("C3").numFmt =
-      '#,##0.00 "DH/L"';
+    if (!hasVariableUnitPrice) {
+      worksheet.getCell("C3").numFmt =
+        '#,##0.00 "DH/L"';
+    }
 
     worksheet.getCell("C3").font = {
       name: "Arial",
@@ -2101,92 +2163,164 @@ function App() {
       {/* GASOIL MODAL */}
       {showForm && (
         <ModalShell
-          title={editingRecord ? "Modifier le bon" : "Ajouter un départ"}
+          title={editingRecord ? "Modifier le bon" : "Ajouter un nouveau bon"}
           eyebrow={editingRecord ? "Modification du bon" : "Nouveau bon gasoil"}
           onClose={closeForm}
+          wide
         >
-          <form onSubmit={handleSubmit} className="p-7">
+          <form onSubmit={handleSubmit} className="p-5 md:p-7">
             {activeAdvance && (
-              <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-blue-500">
-                      {editingRecord ? "Bon existant" : "Avance utilisée"}
-                    </p>
-                    <p className="mt-1 font-black text-blue-950">
-                      {editingRecord
-                        ? "Modification des informations du bon"
-                        : `Chèque ${activeAdvance.numeroCheque}`}
-                    </p>
-                  </div>
+              <div className="mb-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-blue-500">
+                    {editingRecord ? "Bon existant" : "Avance utilisée"}
+                  </p>
+                  <p className="mt-1 font-black text-blue-950">
+                    {editingRecord
+                      ? "Modification du bon"
+                      : `Chèque ${activeAdvance.numeroCheque}`}
+                  </p>
+                </div>
 
-                  <div className="text-right">
-                    <p className="text-xs font-semibold text-blue-500">
-                      Solde disponible
-                    </p>
-                    <p className="text-lg font-black text-blue-950">
-                      {formatMoney(activeAdvance.solde)} DH
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-xs font-semibold text-blue-500">
+                    Prix unitaire du bon
+                  </p>
+                  <p className="mt-1 text-lg font-black text-blue-950">
+                    {form.prixUnitaire
+                      ? `${formatMoney(form.prixUnitaire)} DH/L`
+                      : "À saisir"}
+                  </p>
+                </div>
+
+                <div className="sm:text-right">
+                  <p className="text-xs font-semibold text-blue-500">
+                    Solde disponible
+                  </p>
+                  <p className="mt-1 text-lg font-black text-blue-950">
+                    {formatMoney(activeAdvance.solde)} DH
+                  </p>
                 </div>
               </div>
             )}
 
-            <div className="grid gap-5 md:grid-cols-2">
-              <Field
-                label="Date"
-                type="date"
-                name="date"
-                value={form.date}
-                onChange={handleChange}
-              />
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="min-w-[1280px] w-full border-collapse">
+                <thead className="bg-slate-100">
+                  <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    <th className="border-r border-slate-200 px-3 py-3">Date</th>
+                    <th className="border-r border-slate-200 px-3 py-3">N° Bon</th>
+                    <th className="border-r border-slate-200 px-3 py-3">Autocar</th>
+                    <th className="border-r border-slate-200 px-3 py-3">Départ</th>
+                    <th className="border-r border-slate-200 px-3 py-3">Quantité (L)</th>
+                    <th className="border-r border-slate-200 px-3 py-3">Prix unitaire</th>
+                    <th className="px-3 py-3">Prix total</th>
+                  </tr>
+                </thead>
 
-              <Field
-                label="Autocar"
-                name="autocar"
-                placeholder="Ex : 101"
-                value={form.autocar}
-                onChange={handleChange}
-              />
+                <tbody>
+                  <tr className="align-top">
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <input
+                        type="date"
+                        name="date"
+                        value={form.date}
+                        onChange={handleChange}
+                        required
+                        className="w-full min-w-36 rounded-lg border border-slate-200 bg-white px-3 py-3 font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </td>
 
-              <div className="md:col-span-2">
-                <Field
-                  label="Départ"
-                  name="depart"
-                  placeholder="Ex : Marrakech → Casablanca"
-                  value={form.depart}
-                  onChange={handleChange}
-                />
-              </div>
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <input
+                        name="numeroBon"
+                        value={form.numeroBon}
+                        onChange={handleChange}
+                        placeholder="BG-1025"
+                        required
+                        className="w-full min-w-36 rounded-lg border border-slate-200 bg-white px-3 py-3 font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </td>
 
-              <Field
-                label="Quantité (L)"
-                type="number"
-                step="0.01"
-                name="quantite"
-                placeholder="350"
-                value={form.quantite}
-                onChange={handleChange}
-              />
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <input
+                        name="autocar"
+                        value={form.autocar}
+                        onChange={handleChange}
+                        placeholder="5581"
+                        required
+                        className="w-full min-w-28 rounded-lg border border-slate-200 bg-white px-3 py-3 font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </td>
 
-              <Field
-                label="N° Bon"
-                name="numeroBon"
-                placeholder="Ex : BG-1025"
-                value={form.numeroBon}
-                onChange={handleChange}
-              />
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <input
+                        name="depart"
+                        value={form.depart}
+                        onChange={handleChange}
+                        placeholder="Marrakech → Laâyoune"
+                        required
+                        className="w-full min-w-64 rounded-lg border border-slate-200 bg-white px-3 py-3 font-semibold outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </td>
 
-              <Field
-                label="Prix (DH)"
-                type="number"
-                step="0.01"
-                name="prixTotal"
-                placeholder="Ex : 4620"
-                value={form.prixTotal}
-                onChange={handleChange}
-              />
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        name="quantite"
+                        value={form.quantite}
+                        onChange={handleChange}
+                        placeholder="350"
+                        required
+                        className="w-full min-w-32 rounded-lg border border-slate-200 bg-white px-3 py-3 font-black outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </td>
 
+                    <td className="border-r border-t border-slate-200 p-2">
+                      <div className="min-w-36">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          name="prixUnitaire"
+                          value={form.prixUnitaire}
+                          onChange={handleChange}
+                          placeholder="16,37"
+                          required
+                          className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 font-black text-blue-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        />
+                        <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                          DH/L · modifiable
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="border-t border-slate-200 p-2">
+                      <div className="min-w-40">
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="prixTotal"
+                          value={form.prixTotal}
+                          readOnly
+                          placeholder="Calcul automatique"
+                          className="w-full rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3 font-black text-emerald-800 outline-none"
+                        />
+                        <p className="mt-1 text-[11px] font-semibold text-slate-400">
+                          Quantité × {form.prixUnitaire
+                            ? formatMoney(form.prixUnitaire)
+                            : "—"} DH
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1.2fr]">
               <UploadField
                 label="Photo du bon"
                 helper="JPG, PNG ou WEBP"
@@ -2194,42 +2328,51 @@ function App() {
                 onChange={handleImage}
               />
 
-              <label className="md:col-span-2">
+              <label>
                 <span className="mb-2 block text-sm font-bold text-slate-600">
                   Observation
                 </span>
 
                 <textarea
                   name="observation"
-                  rows="3"
+                  rows="6"
                   value={form.observation}
                   onChange={handleChange}
                   placeholder="Optionnel..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                  className="h-full min-h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
                 />
               </label>
             </div>
 
-            <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
-              <button
-                type="button"
-                onClick={closeForm}
-                className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700"
-              >
-                Annuler
-              </button>
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+              <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                Prix total calculé automatiquement :{" "}
+                <span className="font-black text-blue-700">
+                  Quantité × Prix unitaire
+                </span>
+              </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-200 disabled:opacity-50"
-              >
-                {saving
-                  ? "Enregistrement..."
-                  : editingRecord
-                  ? "Enregistrer les modifications"
-                  : "Enregistrer le bon"}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700"
+                >
+                  Annuler
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-7 py-3 font-bold text-white shadow-lg shadow-blue-200 disabled:opacity-50"
+                >
+                  {saving
+                    ? "Enregistrement..."
+                    : editingRecord
+                    ? "Enregistrer les modifications"
+                    : "Enregistrer le bon"}
+                </button>
+              </div>
             </div>
           </form>
         </ModalShell>
@@ -3452,7 +3595,7 @@ function DarkStat({ label, value }) {
   );
 }
 
-function ModalShell({ eyebrow, title, onClose, children, green = false }) {
+function ModalShell({ eyebrow, title, onClose, children, green = false, wide = false }) {
   return (
     <div
       onMouseDown={onClose}
@@ -3460,7 +3603,9 @@ function ModalShell({ eyebrow, title, onClose, children, green = false }) {
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="mx-auto my-6 w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl md:my-10"
+        className={`mx-auto my-6 w-full overflow-hidden rounded-3xl bg-white shadow-2xl md:my-10 ${
+          wide ? "max-w-[1500px]" : "max-w-3xl"
+        }`}
       >
         <div
           className={`flex items-start justify-between px-7 py-6 text-white ${
