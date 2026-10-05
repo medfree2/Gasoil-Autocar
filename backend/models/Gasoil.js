@@ -54,6 +54,63 @@ const gasoilSchema = new mongoose.Schema(
       ref: "Avance",
       required: true,
     },
+
+    // Snapshot of the user who originally created the bon.
+    // We keep the display fields too, so the history remains readable
+    // even if the user is renamed later.
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    createdByName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    createdByMatricule: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    createdByEmail: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Snapshot of the last user who edited the bon.
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    updatedByName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    updatedByMatricule: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    updatedByEmail: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    lastEditedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

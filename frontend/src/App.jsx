@@ -126,6 +126,40 @@ const formatDate = (value) => {
   });
 };
 
+const formatDateTime = (value) => {
+  if (!value) return "—";
+
+  return new Date(value).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const auditUserLabel = (
+  item,
+  prefix
+) => {
+  if (!item) return "—";
+
+  const matricule =
+    item[`${prefix}Matricule`] || "";
+
+  const name =
+    item[`${prefix}Name`] || "";
+
+  const email =
+    item[`${prefix}Email`] || "";
+
+  if (matricule && name) {
+    return `${matricule} — ${name}`;
+  }
+
+  return matricule || name || email || "—";
+};
+
 const sameDay = (dateA, dateB) => {
   if (!dateA || !dateB) return false;
 
@@ -1106,7 +1140,7 @@ function App() {
     // HEADER - inspired by the station's original workbook
     // ========================================================
 
-    worksheet.mergeCells("A1:H1");
+    worksheet.mergeCells("A1:J1");
 
     const titleCell = worksheet.getCell("A1");
 
@@ -1213,6 +1247,8 @@ function App() {
       "Départ",
       "Observation",
       "Photo du bon",
+      "Saisi par",
+      "Modifié par",
     ];
 
     headerRow.height = 30;
@@ -1301,6 +1337,19 @@ function App() {
             photoUrl
               ? "Voir le bon"
               : "Sans photo",
+            auditUserLabel(
+              item,
+              "createdBy"
+            ),
+            item.updatedBy ||
+            item.updatedByName ||
+            item.updatedByMatricule ||
+            item.updatedByEmail
+              ? auditUserLabel(
+                  item,
+                  "updatedBy"
+                )
+              : "—",
           ]);
 
         row.height = 24;
@@ -1461,11 +1510,17 @@ function App() {
       {
         width: 18,
       },
+      {
+        width: 28,
+      },
+      {
+        width: 28,
+      },
     ];
 
     worksheet.autoFilter = {
       from: "A5",
-      to: "H5",
+      to: "J5",
     };
 
     worksheet.pageSetup = {
@@ -1755,7 +1810,7 @@ function App() {
               <EmptyBlock />
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-[1180px] w-full">
+                <table className="min-w-[1480px] w-full">
                   <thead className="bg-slate-50">
                     <tr className="text-left text-xs font-extrabold uppercase tracking-wider text-slate-400">
                       <th className="px-5 py-4">
@@ -1784,6 +1839,10 @@ function App() {
 
                       <th className="px-5 py-4">
                         Photo
+                      </th>
+
+                      <th className="px-5 py-4">
+                        Traçabilité
                       </th>
 
                       <th className="px-5 py-4 text-center">
@@ -1876,6 +1935,52 @@ function App() {
                           </td>
 
                           <td className="px-5 py-5">
+                            <div className="min-w-64 space-y-3">
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                  Saisi par
+                                </p>
+                                <p className="mt-1 text-sm font-black text-slate-700">
+                                  {auditUserLabel(
+                                    item,
+                                    "createdBy"
+                                  )}
+                                </p>
+                                <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                                  {item.createdAt
+                                    ? formatDateTime(
+                                        item.createdAt
+                                      )
+                                    : "—"}
+                                </p>
+                              </div>
+
+                              {(item.updatedBy ||
+                                item.updatedByName ||
+                                item.updatedByMatricule ||
+                                item.updatedByEmail) && (
+                                <div className="border-t border-slate-100 pt-2">
+                                  <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">
+                                    Modifié par
+                                  </p>
+                                  <p className="mt-1 text-sm font-black text-violet-700">
+                                    {auditUserLabel(
+                                      item,
+                                      "updatedBy"
+                                    )}
+                                  </p>
+                                  <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
+                                    {formatDateTime(
+                                      item.lastEditedAt ||
+                                        item.updatedAt
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-5">
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() =>
@@ -1934,7 +2039,7 @@ function App() {
                         DH
                       </td>
 
-                      <td colSpan="2" />
+                      <td colSpan="3" />
                     </tr>
                   </tfoot>
                 </table>
@@ -2200,6 +2305,59 @@ function App() {
                   <p className="mt-1 text-lg font-black text-blue-950">
                     {formatMoney(activeAdvance.solde)} DH
                   </p>
+                </div>
+              </div>
+            )}
+
+            {editingRecord && (
+              <div className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                    Saisi par
+                  </p>
+                  <p className="mt-1 font-black text-slate-800">
+                    {auditUserLabel(
+                      editingRecord,
+                      "createdBy"
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    {editingRecord.createdAt
+                      ? formatDateTime(
+                          editingRecord.createdAt
+                        )
+                      : "Date inconnue"}
+                  </p>
+                </div>
+
+                <div className="md:text-right">
+                  <p className="text-[11px] font-black uppercase tracking-wider text-violet-500">
+                    Dernière modification
+                  </p>
+
+                  {editingRecord.updatedBy ||
+                  editingRecord.updatedByName ||
+                  editingRecord.updatedByMatricule ||
+                  editingRecord.updatedByEmail ? (
+                    <>
+                      <p className="mt-1 font-black text-violet-700">
+                        {auditUserLabel(
+                          editingRecord,
+                          "updatedBy"
+                        )}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-400">
+                        {formatDateTime(
+                          editingRecord.lastEditedAt ||
+                            editingRecord.updatedAt
+                        )}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 font-bold text-slate-500">
+                      Jamais modifié
+                    </p>
+                  )}
                 </div>
               </div>
             )}

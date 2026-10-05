@@ -173,8 +173,48 @@ const deleteCloudinaryImage = async (
 
 const Gasoil = require("../models/Gasoil");
 const Avance = require("../models/Avance");
+const User = require("../models/User");
 
 const router = express.Router();
+
+const getActionUserSnapshot = async (req) => {
+  const fallback = {
+    userId: req.user?.id || null,
+    name: req.user?.name || "",
+    matricule: req.user?.matricule || "",
+    email: req.user?.email || "",
+  };
+
+  if (!req.user?.id) {
+    return fallback;
+  }
+
+  try {
+    const user = await User.findById(
+      req.user.id
+    ).select(
+      "_id name matricule email"
+    );
+
+    if (!user) {
+      return fallback;
+    }
+
+    return {
+      userId: user._id,
+      name: user.name || "",
+      matricule: user.matricule || "",
+      email: user.email || "",
+    };
+  } catch (error) {
+    console.error(
+      "⚠️ Impossible de charger l'utilisateur pour la traçabilité :",
+      error.message
+    );
+
+    return fallback;
+  }
+};
 
 const getRemainingBalance =
   async (
@@ -420,6 +460,11 @@ router.post(
           uploadResult.secure_url;
       }
 
+      const actor =
+        await getActionUserSnapshot(
+          req
+        );
+
       const gasoil =
         new Gasoil({
           date,
@@ -452,6 +497,18 @@ router.post(
 
           avance:
             avance._id,
+
+          createdBy:
+            actor.userId,
+
+          createdByName:
+            actor.name,
+
+          createdByMatricule:
+            actor.matricule,
+
+          createdByEmail:
+            actor.email,
         });
 
       await gasoil.save();
@@ -684,6 +741,26 @@ router.put(
         gasoil.imageBon =
           newImageUrl;
       }
+
+      const actor =
+        await getActionUserSnapshot(
+          req
+        );
+
+      gasoil.updatedBy =
+        actor.userId;
+
+      gasoil.updatedByName =
+        actor.name;
+
+      gasoil.updatedByMatricule =
+        actor.matricule;
+
+      gasoil.updatedByEmail =
+        actor.email;
+
+      gasoil.lastEditedAt =
+        new Date();
 
       await gasoil.save();
 
