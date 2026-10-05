@@ -7,7 +7,7 @@ const path = require("path");
 dotenv.config();
 
 const gasoilRoutes = require("./routes/gasoil");
-const avanceRoutes = require("./routes/avance");
+const avanceRoutes = require("./routes/Avance");
 const authRoutes = require("./routes/auth");
 const authMiddleware = require("./middleware/auth");
 
@@ -42,10 +42,12 @@ const connectDatabase = async () => {
       })
       .catch((error) => {
         mongoConnectionPromise = null;
+
         console.error(
           "❌ Erreur connexion MongoDB :",
           error.message
         );
+
         throw error;
       });
   }
