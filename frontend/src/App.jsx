@@ -211,6 +211,15 @@ function App() {
   });
   const [editingUser, setEditingUser] = useState(null);
 
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+
   const [form, setForm] = useState({
     date: todayISO(),
     autocar: "",
@@ -324,6 +333,108 @@ function App() {
     setAvances([]);
     setActiveAdvance(null);
     setPage("suivi");
+  };
+
+  const openPasswordForm = () => {
+    setPasswordError("");
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setShowPasswordForm(true);
+  };
+
+  const closePasswordForm = () => {
+    if (savingPassword) return;
+
+    setShowPasswordForm(false);
+    setPasswordError("");
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+  };
+
+  const handlePasswordChange = (event) => {
+    const { name, value } = event.target;
+
+    setPasswordForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    if (passwordError) {
+      setPasswordError("");
+    }
+  };
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+
+    if (
+      passwordForm.newPassword !==
+      passwordForm.confirmPassword
+    ) {
+      setPasswordError(
+        "Les deux nouveaux mots de passe ne correspondent pas."
+      );
+      return;
+    }
+
+    if (
+      String(passwordForm.newPassword).length < 6
+    ) {
+      setPasswordError(
+        "Le nouveau mot de passe doit contenir au moins 6 caractères."
+      );
+      return;
+    }
+
+    try {
+      setSavingPassword(true);
+      setPasswordError("");
+
+      const response = await authFetch(
+        `${AUTH_API}/change-password`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            passwordForm
+          ),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Erreur lors de la modification du mot de passe."
+        );
+      }
+
+      setShowPasswordForm(false);
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      window.alert(
+        "Mot de passe modifié avec succès."
+      );
+    } catch (error) {
+      setPasswordError(
+        error.message
+      );
+    } finally {
+      setSavingPassword(false);
+    }
   };
 
   // =========================================================
@@ -2216,6 +2327,14 @@ function App() {
               </div>
 
               <button
+                onClick={openPasswordForm}
+                title="Changer mon mot de passe"
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+              >
+                <KeyRound size={17} />
+              </button>
+
+              <button
                 onClick={handleLogout}
                 title="Déconnexion"
                 className="rounded-xl p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
@@ -2223,6 +2342,14 @@ function App() {
                 <LogOut size={17} />
               </button>
             </div>
+
+            <button
+              onClick={openPasswordForm}
+              title="Changer mon mot de passe"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 xl:hidden"
+            >
+              <KeyRound size={18} />
+            </button>
 
             {page === "avances" ? (
               <button
@@ -2771,6 +2898,117 @@ function App() {
           </p>
         </div>
       </footer>
+
+      {/* CHANGE OWN PASSWORD MODAL */}
+      {showPasswordForm && (
+        <ModalShell
+          title="Changer mon mot de passe"
+          eyebrow="Sécurité du compte"
+          onClose={closePasswordForm}
+        >
+          <form
+            onSubmit={handlePasswordSubmit}
+            className="p-7"
+          >
+            <div className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
+                  <KeyRound size={20} />
+                </div>
+
+                <div>
+                  <p className="font-black text-slate-900">
+                    Sécuriser votre compte
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Saisissez votre mot de passe actuel, puis choisissez un nouveau mot de passe d'au moins 6 caractères.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {passwordError && (
+              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {passwordError}
+              </div>
+            )}
+
+            <div className="space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Mot de passe actuel
+                </label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  autoComplete="current-password"
+                  value={passwordForm.currentPassword}
+                  onChange={handlePasswordChange}
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Votre mot de passe actuel"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Nouveau mot de passe
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  autoComplete="new-password"
+                  minLength={6}
+                  value={passwordForm.newPassword}
+                  onChange={handlePasswordChange}
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Minimum 6 caractères"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Confirmer le nouveau mot de passe
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  autoComplete="new-password"
+                  minLength={6}
+                  value={passwordForm.confirmPassword}
+                  onChange={handlePasswordChange}
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  placeholder="Répétez le nouveau mot de passe"
+                />
+              </div>
+            </div>
+
+            <div className="mt-7 flex items-center justify-end gap-3 border-t border-slate-100 pt-5">
+              <button
+                type="button"
+                onClick={closePasswordForm}
+                disabled={savingPassword}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
+              >
+                <KeyRound size={18} />
+                {savingPassword
+                  ? "Modification..."
+                  : "Changer le mot de passe"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
 
       {/* USER MODAL */}
       {showUserForm && authUser.role === "ADMIN" && (
