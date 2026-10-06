@@ -321,6 +321,7 @@ router.post(
         matricule,
         password,
         name,
+        role,
       } = req.body;
 
       if (
@@ -337,6 +338,22 @@ router.post(
         String(matricule)
           .trim()
           .toUpperCase();
+
+      const normalizedRole =
+        String(role || "USER")
+          .trim()
+          .toUpperCase();
+
+      if (
+        !["USER", "ADMIN"].includes(
+          normalizedRole
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Le rôle doit être USER ou ADMIN.",
+        });
+      }
 
       if (!normalizedMatricule) {
         return res.status(400).json({
@@ -385,7 +402,8 @@ router.post(
 
           passwordHash,
 
-          role: "USER",
+          role:
+            normalizedRole,
 
           active: true,
         });
@@ -433,19 +451,11 @@ router.put(
         });
       }
 
-      if (
-        user.role === "ADMIN"
-      ) {
-        return res.status(403).json({
-          message:
-            "Le compte administrateur principal n'est pas modifiable depuis cette page.",
-        });
-      }
-
       const {
         matricule,
         name,
         password,
+        role,
       } = req.body;
 
       if (!matricule) {
@@ -459,6 +469,33 @@ router.put(
         String(matricule)
           .trim()
           .toUpperCase();
+
+      const normalizedRole =
+        String(role || user.role || "USER")
+          .trim()
+          .toUpperCase();
+
+      if (
+        !["USER", "ADMIN"].includes(
+          normalizedRole
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Le rôle doit être USER ou ADMIN.",
+        });
+      }
+
+      if (
+        String(req.user.id) ===
+          String(user._id) &&
+        normalizedRole !== "ADMIN"
+      ) {
+        return res.status(400).json({
+          message:
+            "Vous ne pouvez pas retirer votre propre rôle administrateur.",
+        });
+      }
 
       if (!normalizedMatricule) {
         return res.status(400).json({
@@ -492,6 +529,9 @@ router.put(
         String(
           name || ""
         ).trim();
+
+      user.role =
+        normalizedRole;
 
       if (
         password !== undefined &&
@@ -571,10 +611,17 @@ router.delete(
       if (
         user.role === "ADMIN"
       ) {
-        return res.status(403).json({
-          message:
-            "Le compte administrateur ne peut pas être supprimé ici.",
-        });
+        const adminCount =
+          await User.countDocuments({
+            role: "ADMIN",
+          });
+
+        if (adminCount <= 1) {
+          return res.status(400).json({
+            message:
+              "Impossible de supprimer le dernier administrateur.",
+          });
+        }
       }
 
       await user.deleteOne();

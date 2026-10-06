@@ -826,6 +826,39 @@ router.delete(
         });
       }
 
+      const currentUser =
+        await User.findById(
+          req.user?.id
+        ).select(
+          "_id role"
+        );
+
+      if (!currentUser) {
+        return res.status(401).json({
+          message:
+            "Utilisateur authentifié introuvable.",
+        });
+      }
+
+      const isAdmin =
+        currentUser.role === "ADMIN";
+
+      const isOwner =
+        gasoil.createdBy &&
+        String(gasoil.createdBy) ===
+          String(currentUser._id);
+
+      if (
+        !isAdmin &&
+        !isOwner
+      ) {
+        return res.status(403).json({
+          code: "DELETE_NOT_ALLOWED",
+          message:
+            "Vous ne pouvez pas supprimer un bon créé par un autre utilisateur.",
+        });
+      }
+
       const avance =
         await Avance.findById(
           gasoil.avance

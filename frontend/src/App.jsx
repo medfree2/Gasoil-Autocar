@@ -207,6 +207,7 @@ function App() {
     matricule: "",
     password: "",
     name: "",
+    role: "USER",
   });
   const [editingUser, setEditingUser] = useState(null);
 
@@ -445,25 +446,20 @@ function App() {
       matricule: "",
       password: "",
       name: "",
+      role: "USER",
     });
 
     setShowUserForm(true);
   };
 
   const openEditUserForm = (user) => {
-    if (user.role === "ADMIN") {
-      setMessage(
-        "Le compte administrateur principal n'est pas modifiable depuis cette page."
-      );
-      return;
-    }
-
     setEditingUser(user);
 
     setUserForm({
       matricule: user.matricule || "",
       password: "",
       name: user.name || "",
+      role: user.role || "USER",
     });
 
     setShowUserForm(true);
@@ -477,6 +473,7 @@ function App() {
       matricule: "",
       password: "",
       name: "",
+      role: "USER",
     });
   };
 
@@ -509,6 +506,9 @@ function App() {
 
         name:
           userForm.name,
+
+        role:
+          userForm.role,
       };
 
       if (userForm.password) {
@@ -2238,7 +2238,7 @@ function App() {
                 className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5"
               >
                 <UserPlus size={18} />
-                Nouvel utilisateur
+                Nouveau compte
               </button>
             ) : (
               <button
@@ -2605,19 +2605,23 @@ function App() {
                                 />
                               </button>
 
-                              <button
-                                onClick={() =>
-                                  handleDelete(
-                                    item._id
-                                  )
-                                }
-                                title="Supprimer"
-                                className="rounded-lg bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100"
-                              >
-                                <Trash2
-                                  size={17}
-                                />
-                              </button>
+                              {(authUser.role === "ADMIN" ||
+                                String(item.createdBy || "") ===
+                                  String(authUser.id || "")) && (
+                                <button
+                                  onClick={() =>
+                                    handleDelete(
+                                      item._id
+                                    )
+                                  }
+                                  title="Supprimer"
+                                  className="rounded-lg bg-red-50 p-1.5 text-red-500 transition hover:bg-red-100"
+                                >
+                                  <Trash2
+                                    size={17}
+                                  />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -2748,6 +2752,7 @@ function App() {
           <UsersPage
             users={users}
             loading={loadingUsers}
+            currentUser={authUser}
             onNewUser={openUserForm}
             onEditUser={openEditUserForm}
             onDeleteUser={handleDeleteUser}
@@ -2773,7 +2778,7 @@ function App() {
           title={
             editingUser
               ? "Modifier l'utilisateur"
-              : "Nouvel utilisateur"
+              : "Nouveau compte"
           }
           eyebrow={
             editingUser
@@ -2794,13 +2799,15 @@ function App() {
 
                 <div>
                   <p className="font-black text-violet-950">
-                    Compte utilisateur
+                    {userForm.role === "ADMIN"
+                      ? "Compte administrateur"
+                      : "Compte utilisateur"}
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-violet-700">
-                    {editingUser
-                      ? "Modifiez le matricule, le nom ou changez le mot de passe de cet utilisateur."
-                      : "Cet utilisateur pourra se connecter avec son matricule et son mot de passe. Il n'aura pas accès à la gestion des utilisateurs."}
+                    {userForm.role === "ADMIN"
+                      ? "Cet administrateur aura accès à la gestion des utilisateurs et pourra supprimer tous les bons."
+                      : "Cet utilisateur pourra se connecter et ne pourra supprimer que les bons qu'il a lui-même créés."}
                   </p>
                 </div>
               </div>
@@ -2823,6 +2830,26 @@ function App() {
                 onChange={handleUserFormChange}
                 required={false}
               />
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Rôle
+                </label>
+
+                <select
+                  name="role"
+                  value={userForm.role}
+                  onChange={handleUserFormChange}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                >
+                  <option value="USER">
+                    USER — Utilisateur
+                  </option>
+                  <option value="ADMIN">
+                    ADMIN — Administrateur
+                  </option>
+                </select>
+              </div>
 
               <div className="md:col-span-2">
                 <Field
@@ -2867,7 +2894,7 @@ function App() {
                     : "Création..."
                   : editingUser
                   ? "Enregistrer les modifications"
-                  : "Créer l'utilisateur"}
+                  : "Créer le compte"}
               </button>
             </div>
           </form>
@@ -3700,6 +3727,7 @@ function AuthFeature({
 function UsersPage({
   users,
   loading,
+  currentUser,
   onNewUser,
   onEditUser,
   onDeleteUser,
@@ -3723,7 +3751,7 @@ function UsersPage({
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Créez les accès par matricule et mot de passe.
+            Créez des comptes USER ou ADMIN par matricule et mot de passe.
           </p>
         </div>
 
@@ -3732,7 +3760,7 @@ function UsersPage({
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200"
         >
           <UserPlus size={18} />
-          Nouvel utilisateur
+          Nouveau compte
         </button>
       </div>
 
@@ -3826,16 +3854,15 @@ function UsersPage({
                       className="hover:bg-slate-50"
                     >
                       <td className="px-6 py-5">
-                        {user.role ===
-                        "ADMIN" ? (
-                          <span className="rounded-lg bg-violet-50 px-3 py-2 font-black text-violet-700">
-                            ADMIN
-                          </span>
-                        ) : (
-                          <span className="rounded-lg bg-blue-50 px-3 py-2 font-black text-blue-700">
-                            {user.matricule}
-                          </span>
-                        )}
+                        <span
+                          className={`rounded-lg px-3 py-2 font-black ${
+                            user.role === "ADMIN"
+                              ? "bg-violet-50 text-violet-700"
+                              : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {user.matricule || "—"}
+                        </span>
                       </td>
 
                       <td className="px-6 py-5 font-bold">
@@ -3868,18 +3895,19 @@ function UsersPage({
                       </td>
 
                       <td className="px-6 py-5">
-                        {user.role !== "ADMIN" && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() =>
-                                onEditUser(user)
-                              }
-                              title="Modifier"
-                              className="rounded-xl bg-blue-50 p-2.5 text-blue-600 transition hover:bg-blue-100"
-                            >
-                              <Pencil size={17} />
-                            </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              onEditUser(user)
+                            }
+                            title="Modifier"
+                            className="rounded-xl bg-blue-50 p-2.5 text-blue-600 transition hover:bg-blue-100"
+                          >
+                            <Pencil size={17} />
+                          </button>
 
+                          {String(user.id) !==
+                            String(currentUser?.id) && (
                             <button
                               onClick={() =>
                                 onDeleteUser(
@@ -3893,8 +3921,8 @@ function UsersPage({
                                 size={17}
                               />
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
