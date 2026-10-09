@@ -2220,8 +2220,8 @@ function App() {
       "N° Bon",
       "Autocar",
       "Départ",
-      "Quantité",
-      "Prix total",
+      "Quantité (L)",
+      "Prix total (DH)",
       "Photo",
       "Saisi par",
     ];
@@ -2345,10 +2345,10 @@ function App() {
       row.height = 34;
 
       row.getCell(5).numFmt =
-        '#,##0.00 "L"';
+        '#,##0.00';
 
       row.getCell(6).numFmt =
-        '#,##0.00 "DH"';
+        '#,##0.00';
 
       row.eachCell(
         (cell) => {
@@ -2479,7 +2479,7 @@ function App() {
     };
 
     totalQuantityCell.numFmt =
-      '#,##0.00 "L"';
+      '#,##0.00';
 
     const totalAmountCell =
       worksheet.getCell(
@@ -2494,7 +2494,7 @@ function App() {
     };
 
     totalAmountCell.numFmt =
-      '#,##0.00 "DH"';
+      '#,##0.00';
 
     [
       totalQuantityCell,
@@ -2680,7 +2680,7 @@ function App() {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         }
       ),
-      `Suivi_Gasoil_Premium_${fileDate}.xlsx`
+      `Suivi_Gasoil_${fileDate}.xlsx`
     );
   };
 
