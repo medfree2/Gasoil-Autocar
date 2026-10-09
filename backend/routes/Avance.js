@@ -485,7 +485,8 @@ router.get(
             "name code active"
           )
           .sort({
-            createdAt: -1,
+            date: 1,
+            createdAt: 1,
           });
 
       if (!avance) {
@@ -654,21 +655,6 @@ router.post(
         uploadedImageUrl =
           uploadResult.secure_url;
       }
-
-      await Avance.updateMany(
-        {
-          centre:
-            centre._id,
-          statut:
-            "ACTIVE",
-        },
-        {
-          $set: {
-            statut:
-              "CLOTUREE",
-          },
-        }
-      );
 
       const avance =
         new Avance({

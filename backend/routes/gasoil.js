@@ -659,15 +659,37 @@ router.post(
           });
       }
 
-      const avance =
-        await Avance.findOne({
+      // Use the oldest ACTIVE advance first.
+      // A new cheque does not close an older cheque that still has a balance.
+      const activeAdvances =
+        await Avance.find({
           centre:
             centre._id,
           statut:
             "ACTIVE",
         }).sort({
-          createdAt: -1,
+          date: 1,
+          createdAt: 1,
         });
+
+      let avance = null;
+      let remaining = 0;
+
+      for (const candidate of activeAdvances) {
+        const balance =
+          await getRemainingBalance(
+            candidate
+          );
+
+        if (balance.remaining > 0.005) {
+          avance = candidate;
+          remaining = balance.remaining;
+          break;
+        }
+
+        candidate.statut = "CLOTUREE";
+        await candidate.save();
+      }
 
       if (!avance) {
         return res
@@ -704,16 +726,9 @@ router.post(
           });
       }
 
-      const {
-        remaining,
-      } =
-        await getRemainingBalance(
-          avance
-        );
-
       if (
         prixTotalNumber >
-        remaining
+        remaining + 0.005
       ) {
         return res
           .status(409)
@@ -805,7 +820,7 @@ router.post(
         prixTotalNumber;
 
       if (
-        balanceAfter <= 0
+        balanceAfter <= 0.005
       ) {
         avance.statut =
           "CLOTUREE";
@@ -1120,6 +1135,22 @@ router.put(
 
       await gasoil.save();
 
+      const balanceAfterUpdate =
+        remaining -
+        prixTotalNumber;
+
+      if (
+        balanceAfterUpdate <= 0.005
+      ) {
+        if (avance.statut !== "CLOTUREE") {
+          avance.statut = "CLOTUREE";
+          await avance.save();
+        }
+      } else if (avance.statut !== "ACTIVE") {
+        avance.statut = "ACTIVE";
+        await avance.save();
+      }
+
       if (
         newImageUrl &&
         oldImageUrl
@@ -1268,17 +1299,8 @@ router.delete(
             avance
           );
 
-        const activeAdvance =
-          await Avance.findOne({
-            centre:
-              avance.centre,
-            statut:
-              "ACTIVE",
-          });
-
         if (
-          balance.remaining > 0 &&
-          !activeAdvance
+          balance.remaining > 0.005
         ) {
           avance.statut =
             "ACTIVE";
