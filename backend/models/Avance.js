@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const avanceSchema = new mongoose.Schema(
   {
+    centre: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Centre",
+      required: true,
+      index: true,
+    },
+
     date: {
       type: Date,
       required: true,
@@ -17,7 +24,6 @@ const avanceSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
 
     station: {
@@ -53,5 +59,21 @@ const avanceSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+avanceSchema.index(
+  {
+    centre: 1,
+    numeroCheque: 1,
+  },
+  {
+    unique: true,
+    name: "centre_numeroCheque_unique",
+  }
+);
+
+avanceSchema.index({
+  centre: 1,
+  statut: 1,
+});
 
 module.exports = mongoose.model("Avance", avanceSchema);

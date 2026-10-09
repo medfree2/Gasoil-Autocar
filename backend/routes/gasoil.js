@@ -2,11 +2,21 @@ const express = require("express");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 
+const Gasoil = require("../models/Gasoil");
+const Avance = require("../models/Avance");
+const User = require("../models/User");
+const Centre = require("../models/Centre");
+
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name:
+    process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:
+    process.env.CLOUDINARY_API_KEY,
+  api_secret:
+    process.env.CLOUDINARY_API_SECRET,
 });
+
+const router = express.Router();
 
 const ensureCloudinaryConfig = () => {
   if (
@@ -20,7 +30,11 @@ const ensureCloudinaryConfig = () => {
   }
 };
 
-const fileFilter = (req, file, cb) => {
+const fileFilter = (
+  req,
+  file,
+  cb
+) => {
   const allowedTypes = [
     "image/jpeg",
     "image/jpg",
@@ -28,7 +42,11 @@ const fileFilter = (req, file, cb) => {
     "image/webp",
   ];
 
-  if (allowedTypes.includes(file.mimetype)) {
+  if (
+    allowedTypes.includes(
+      file.mimetype
+    )
+  ) {
     cb(null, true);
   } else {
     cb(
@@ -40,10 +58,12 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage:
+    multer.memoryStorage(),
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize:
+      10 * 1024 * 1024,
   },
 });
 
@@ -51,46 +71,61 @@ const uploadImageToCloudinary = (
   file,
   folder
 ) =>
-  new Promise((resolve, reject) => {
-    ensureCloudinaryConfig();
+  new Promise(
+    (resolve, reject) => {
+      ensureCloudinaryConfig();
 
-    const stream =
-      cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: "image",
-          use_filename: false,
-          unique_filename: true,
-          overwrite: false,
-          transformation: [
-            {
-              width: 1800,
-              height: 1800,
-              crop: "limit",
-              quality: "auto:good",
-            },
-          ],
-        },
-        (error, result) => {
-          if (error) {
-            reject(error);
-            return;
+      const stream =
+        cloudinary.uploader.upload_stream(
+          {
+            folder,
+            resource_type:
+              "image",
+            use_filename:
+              false,
+            unique_filename:
+              true,
+            overwrite:
+              false,
+            transformation: [
+              {
+                width: 1800,
+                height: 1800,
+                crop: "limit",
+                quality:
+                  "auto:good",
+              },
+            ],
+          },
+          (
+            error,
+            result
+          ) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            resolve(result);
           }
+        );
 
-          resolve(result);
-        }
+      stream.end(
+        file.buffer
       );
+    }
+  );
 
-    stream.end(file.buffer);
-  });
-
-const getCloudinaryPublicId = (imageUrl) => {
+const getCloudinaryPublicId = (
+  imageUrl
+) => {
   if (!imageUrl) {
     return null;
   }
 
   try {
-    const parsed = new URL(imageUrl);
+    const parsed =
+      new URL(imageUrl);
 
     if (
       !parsed.hostname.endsWith(
@@ -106,23 +141,33 @@ const getCloudinaryPublicId = (imageUrl) => {
         .filter(Boolean);
 
     const uploadIndex =
-      parts.indexOf("upload");
+      parts.indexOf(
+        "upload"
+      );
 
-    if (uploadIndex === -1) {
+    if (
+      uploadIndex === -1
+    ) {
       return null;
     }
 
     const publicParts =
-      parts.slice(uploadIndex + 1);
+      parts.slice(
+        uploadIndex + 1
+      );
 
     if (
       publicParts[0] &&
-      /^v\d+$/.test(publicParts[0])
+      /^v\d+$/.test(
+        publicParts[0]
+      )
     ) {
       publicParts.shift();
     }
 
-    if (!publicParts.length) {
+    if (
+      !publicParts.length
+    ) {
       return null;
     }
 
@@ -148,7 +193,9 @@ const deleteCloudinaryImage = async (
   imageUrl
 ) => {
   const publicId =
-    getCloudinaryPublicId(imageUrl);
+    getCloudinaryPublicId(
+      imageUrl
+    );
 
   if (!publicId) {
     return;
@@ -160,7 +207,8 @@ const deleteCloudinaryImage = async (
     await cloudinary.uploader.destroy(
       publicId,
       {
-        resource_type: "image",
+        resource_type:
+          "image",
       }
     );
   } catch (error) {
@@ -171,49 +219,147 @@ const deleteCloudinaryImage = async (
   }
 };
 
-const Gasoil = require("../models/Gasoil");
-const Avance = require("../models/Avance");
-const User = require("../models/User");
-
-const router = express.Router();
-
-const getActionUserSnapshot = async (req) => {
-  const fallback = {
-    userId: req.user?.id || null,
-    name: req.user?.name || "",
-    matricule: req.user?.matricule || "",
-    email: req.user?.email || "",
-  };
-
+const getCurrentUser = async (
+  req
+) => {
   if (!req.user?.id) {
-    return fallback;
+    return null;
   }
 
-  try {
-    const user = await User.findById(
-      req.user.id
-    ).select(
-      "_id name matricule email"
-    );
+  return User.findById(
+    req.user.id
+  ).populate(
+    "centre",
+    "name code active"
+  );
+};
 
-    if (!user) {
-      return fallback;
-    }
+const getActionUserSnapshot = async (
+  req,
+  currentUser = null
+) => {
+  const user =
+    currentUser ||
+    (await getCurrentUser(
+      req
+    ));
 
+  if (!user) {
     return {
-      userId: user._id,
-      name: user.name || "",
-      matricule: user.matricule || "",
-      email: user.email || "",
+      userId:
+        req.user?.id ||
+        null,
+      name:
+        req.user?.name ||
+        "",
+      matricule:
+        req.user?.matricule ||
+        "",
+      email:
+        req.user?.email ||
+        "",
     };
-  } catch (error) {
-    console.error(
-      "⚠️ Impossible de charger l'utilisateur pour la traçabilité :",
-      error.message
+  }
+
+  return {
+    userId: user._id,
+    name: user.name || "",
+    matricule:
+      user.matricule || "",
+    email:
+      user.email || "",
+  };
+};
+
+const getRequestedCentreId = (
+  req,
+  currentUser,
+  {
+    requiredForSuperAdmin =
+      false,
+    bodyFirst = false,
+  } = {}
+) => {
+  if (
+    currentUser.role !==
+    "SUPER_ADMIN"
+  ) {
+    return String(
+      currentUser.centre?._id ||
+        currentUser.centre ||
+        ""
+    );
+  }
+
+  const queryCentre =
+    req.query?.centre;
+
+  const bodyCentre =
+    req.body?.centre;
+
+  const requested =
+    bodyFirst
+      ? bodyCentre ||
+        queryCentre
+      : queryCentre ||
+        bodyCentre;
+
+  if (
+    requested &&
+    requested !== "all"
+  ) {
+    return String(requested);
+  }
+
+  if (
+    requiredForSuperAdmin
+  ) {
+    return "";
+  }
+
+  return null;
+};
+
+const assertCentreAvailable = async (
+  centreId
+) => {
+  if (!centreId) {
+    return null;
+  }
+
+  const centre =
+    await Centre.findById(
+      centreId
     );
 
-    return fallback;
+  if (
+    !centre ||
+    centre.active === false
+  ) {
+    return null;
   }
+
+  return centre;
+};
+
+const canAccessRecord = (
+  currentUser,
+  record
+) => {
+  if (
+    currentUser.role ===
+    "SUPER_ADMIN"
+  ) {
+    return true;
+  }
+
+  return (
+    String(record.centre) ===
+    String(
+      currentUser.centre?._id ||
+        currentUser.centre
+    )
+  );
 };
 
 const getRemainingBalance =
@@ -223,6 +369,7 @@ const getRemainingBalance =
   ) => {
     const match = {
       avance: avance._id,
+      centre: avance.centre,
     };
 
     if (excludeGasoilId) {
@@ -241,7 +388,8 @@ const getRemainingBalance =
           $group: {
             _id: null,
             total: {
-              $sum: "$prixTotal",
+              $sum:
+                "$prixTotal",
             },
           },
         },
@@ -249,14 +397,16 @@ const getRemainingBalance =
 
     const used =
       Number(
-        result[0]?.total || 0
+        result[0]?.total ||
+          0
       );
 
     return {
       used,
       remaining:
-        Number(avance.montant) -
-        used,
+        Number(
+          avance.montant
+        ) - used,
     };
   };
 
@@ -268,11 +418,48 @@ router.get(
   "/",
   async (req, res) => {
     try {
+      const currentUser =
+        await getCurrentUser(
+          req
+        );
+
+      if (
+        !currentUser ||
+        currentUser.active ===
+          false
+      ) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Session utilisateur invalide.",
+          });
+      }
+
+      const centreId =
+        getRequestedCentreId(
+          req,
+          currentUser
+        );
+
+      const query = {};
+
+      if (centreId) {
+        query.centre =
+          centreId;
+      }
+
       const gasoils =
-        await Gasoil.find()
+        await Gasoil.find(
+          query
+        )
           .populate(
             "avance",
-            "numeroCheque montant station statut"
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "centre",
+            "name code active"
           )
           .sort({
             date: -1,
@@ -299,19 +486,54 @@ router.get(
   "/:id",
   async (req, res) => {
     try {
+      const currentUser =
+        await getCurrentUser(
+          req
+        );
+
+      if (!currentUser) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Session utilisateur invalide.",
+          });
+      }
+
       const gasoil =
         await Gasoil.findById(
           req.params.id
-        ).populate(
-          "avance",
-          "numeroCheque montant station statut"
-        );
+        )
+          .populate(
+            "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "centre",
+            "name code active"
+          );
 
       if (!gasoil) {
-        return res.status(404).json({
-          message:
-            "Enregistrement introuvable.",
-        });
+        return res
+          .status(404)
+          .json({
+            message:
+              "Enregistrement introuvable.",
+          });
+      }
+
+      if (
+        !canAccessRecord(
+          currentUser,
+          gasoil
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            message:
+              "Vous n'avez pas accès à ce bon.",
+          });
       }
 
       res.json(gasoil);
@@ -332,11 +554,66 @@ router.get(
 
 router.post(
   "/",
-  upload.single("imageBon"),
+  upload.single(
+    "imageBon"
+  ),
   async (req, res) => {
-    let uploadedImageUrl = "";
+    let uploadedImageUrl =
+      "";
 
     try {
+      const currentUser =
+        await getCurrentUser(
+          req
+        );
+
+      if (
+        !currentUser ||
+        currentUser.active ===
+          false
+      ) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Session utilisateur invalide.",
+          });
+      }
+
+      const centreId =
+        getRequestedCentreId(
+          req,
+          currentUser,
+          {
+            requiredForSuperAdmin:
+              true,
+            bodyFirst: true,
+          }
+        );
+
+      if (!centreId) {
+        return res
+          .status(400)
+          .json({
+            message:
+              "Sélectionnez un centre avant d'ajouter un bon.",
+          });
+      }
+
+      const centre =
+        await assertCentreAvailable(
+          centreId
+        );
+
+      if (!centre) {
+        return res
+          .status(400)
+          .json({
+            message:
+              "Centre invalide ou désactivé.",
+          });
+      }
+
       const {
         date,
         autocar,
@@ -355,40 +632,52 @@ router.post(
         !numeroBon ||
         !prixTotal
       ) {
-        return res.status(400).json({
-          message:
-            "Veuillez remplir tous les champs obligatoires.",
-        });
+        return res
+          .status(400)
+          .json({
+            message:
+              "Veuillez remplir tous les champs obligatoires.",
+          });
       }
 
       const duplicate =
         await Gasoil.findOne({
+          centre:
+            centre._id,
           numeroBon:
-            numeroBon.trim(),
+            String(
+              numeroBon
+            ).trim(),
         });
 
       if (duplicate) {
-        return res.status(409).json({
-          message:
-            "Ce numéro de bon existe déjà.",
-        });
+        return res
+          .status(409)
+          .json({
+            message:
+              "Ce numéro de bon existe déjà dans ce centre.",
+          });
       }
 
       const avance =
         await Avance.findOne({
-          statut: "ACTIVE",
+          centre:
+            centre._id,
+          statut:
+            "ACTIVE",
         }).sort({
           createdAt: -1,
         });
 
       if (!avance) {
-        return res.status(400).json({
-          code:
-            "NO_ACTIVE_ADVANCE",
-
-          message:
-            "Aucune avance active. Ajoutez d'abord un nouveau chèque d'avance.",
-        });
+        return res
+          .status(400)
+          .json({
+            code:
+              "NO_ACTIVE_ADVANCE",
+            message:
+              "Aucune avance active pour ce centre. Ajoutez d'abord un nouveau chèque d'avance.",
+          });
       }
 
       const quantiteNumber =
@@ -407,10 +696,12 @@ router.post(
         ) ||
         prixTotalNumber <= 0
       ) {
-        return res.status(400).json({
-          message:
-            "Quantité ou prix invalide.",
-        });
+        return res
+          .status(400)
+          .json({
+            message:
+              "Quantité ou prix invalide.",
+          });
       }
 
       const {
@@ -424,36 +715,34 @@ router.post(
         prixTotalNumber >
         remaining
       ) {
-        return res.status(409).json({
-          code:
-            "INSUFFICIENT_ADVANCE",
-
-          message:
-            "Solde de l'avance insuffisant.",
-
-          solde:
-            Math.max(
-              remaining,
-              0
-            ),
-
-          montantBon:
-            prixTotalNumber,
-
-          manque:
-            prixTotalNumber -
-            Math.max(
-              remaining,
-              0
-            ),
-        });
+        return res
+          .status(409)
+          .json({
+            code:
+              "INSUFFICIENT_ADVANCE",
+            message:
+              "Solde de l'avance insuffisant.",
+            solde:
+              Math.max(
+                remaining,
+                0
+              ),
+            montantBon:
+              prixTotalNumber,
+            manque:
+              prixTotalNumber -
+              Math.max(
+                remaining,
+                0
+              ),
+          });
       }
 
       if (req.file) {
         const uploadResult =
           await uploadImageToCloudinary(
             req.file,
-            "suivi-gasoil/bons"
+            `suivi-gasoil/${centre.code.toLowerCase()}/bons`
           );
 
         uploadedImageUrl =
@@ -462,51 +751,49 @@ router.post(
 
       const actor =
         await getActionUserSnapshot(
-          req
+          req,
+          currentUser
         );
 
       const gasoil =
         new Gasoil({
+          centre:
+            centre._id,
           date,
-
           autocar:
-            autocar.trim(),
-
+            String(
+              autocar
+            ).trim(),
           depart:
-            depart.trim(),
-
+            String(
+              depart
+            ).trim(),
           quantite:
             quantiteNumber,
-
           numeroBon:
-            numeroBon.trim(),
-
+            String(
+              numeroBon
+            ).trim(),
           prixTotal:
             Number(
               prixTotalNumber.toFixed(
                 2
               )
             ),
-
           observation:
-            observation?.trim() ||
-            "",
-
+            String(
+              observation || ""
+            ).trim(),
           imageBon:
             uploadedImageUrl,
-
           avance:
             avance._id,
-
           createdBy:
             actor.userId,
-
           createdByName:
             actor.name,
-
           createdByMatricule:
             actor.matricule,
-
           createdByEmail:
             actor.email,
         });
@@ -527,10 +814,17 @@ router.post(
       }
 
       const populated =
-        await gasoil.populate(
-          "avance",
-          "numeroCheque montant station statut"
-        );
+        await Gasoil.findById(
+          gasoil._id
+        )
+          .populate(
+            "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "centre",
+            "name code active"
+          );
 
       res.status(201).json(
         populated
@@ -538,7 +832,9 @@ router.post(
     } catch (error) {
       console.error(error);
 
-      if (uploadedImageUrl) {
+      if (
+        uploadedImageUrl
+      ) {
         await deleteCloudinaryImage(
           uploadedImageUrl
         );
@@ -547,10 +843,12 @@ router.post(
       if (
         error.code === 11000
       ) {
-        return res.status(409).json({
-          message:
-            "Ce numéro de bon existe déjà.",
-        });
+        return res
+          .status(409)
+          .json({
+            message:
+              "Ce numéro de bon existe déjà dans ce centre.",
+          });
       }
 
       res.status(500).json({
@@ -567,21 +865,53 @@ router.post(
 
 router.put(
   "/:id",
-  upload.single("imageBon"),
+  upload.single(
+    "imageBon"
+  ),
   async (req, res) => {
     let newImageUrl = "";
 
     try {
+      const currentUser =
+        await getCurrentUser(
+          req
+        );
+
+      if (!currentUser) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Session utilisateur invalide.",
+          });
+      }
+
       const gasoil =
         await Gasoil.findById(
           req.params.id
         );
 
       if (!gasoil) {
-        return res.status(404).json({
-          message:
-            "Enregistrement introuvable.",
-        });
+        return res
+          .status(404)
+          .json({
+            message:
+              "Enregistrement introuvable.",
+          });
+      }
+
+      if (
+        !canAccessRecord(
+          currentUser,
+          gasoil
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            message:
+              "Vous ne pouvez modifier que les bons de votre centre.",
+          });
       }
 
       const {
@@ -602,17 +932,22 @@ router.put(
         !numeroBon ||
         !prixTotal
       ) {
-        return res.status(400).json({
-          message:
-            "Veuillez remplir tous les champs obligatoires.",
-        });
+        return res
+          .status(400)
+          .json({
+            message:
+              "Veuillez remplir tous les champs obligatoires.",
+          });
       }
 
       const duplicate =
         await Gasoil.findOne({
+          centre:
+            gasoil.centre,
           numeroBon:
-            numeroBon.trim(),
-
+            String(
+              numeroBon
+            ).trim(),
           _id: {
             $ne:
               gasoil._id,
@@ -620,10 +955,12 @@ router.put(
         });
 
       if (duplicate) {
-        return res.status(409).json({
-          message:
-            "Ce numéro de bon existe déjà.",
-        });
+        return res
+          .status(409)
+          .json({
+            message:
+              "Ce numéro de bon existe déjà dans ce centre.",
+          });
       }
 
       const quantiteNumber =
@@ -642,10 +979,12 @@ router.put(
         ) ||
         prixTotalNumber <= 0
       ) {
-        return res.status(400).json({
-          message:
-            "Quantité ou prix invalide.",
-        });
+        return res
+          .status(400)
+          .json({
+            message:
+              "Quantité ou prix invalide.",
+          });
       }
 
       const avance =
@@ -654,10 +993,12 @@ router.put(
         );
 
       if (!avance) {
-        return res.status(400).json({
-          message:
-            "L'avance associée à ce bon est introuvable.",
-        });
+        return res
+          .status(400)
+          .json({
+            message:
+              "L'avance associée à ce bon est introuvable.",
+          });
       }
 
       const {
@@ -672,59 +1013,72 @@ router.put(
         prixTotalNumber >
         remaining
       ) {
-        return res.status(409).json({
-          code:
-            "INSUFFICIENT_ADVANCE",
-
-          message:
-            "Le nouveau prix dépasse le montant disponible sur l'avance de ce bon.",
-
-          solde:
-            Math.max(
-              remaining,
-              0
-            ),
-
-          montantBon:
-            prixTotalNumber,
-
-          manque:
-            prixTotalNumber -
-            Math.max(
-              remaining,
-              0
-            ),
-        });
+        return res
+          .status(409)
+          .json({
+            code:
+              "INSUFFICIENT_ADVANCE",
+            message:
+              "Le nouveau prix dépasse le montant disponible sur l'avance de ce bon.",
+            solde:
+              Math.max(
+                remaining,
+                0
+              ),
+            montantBon:
+              prixTotalNumber,
+            manque:
+              prixTotalNumber -
+              Math.max(
+                remaining,
+                0
+              ),
+          });
       }
 
       const oldImageUrl =
         gasoil.imageBon || "";
 
       if (req.file) {
+        const centre =
+          await Centre.findById(
+            gasoil.centre
+          );
+
+        const folderCode =
+          centre?.code
+            ?.toLowerCase() ||
+          "centre";
+
         const uploadResult =
           await uploadImageToCloudinary(
             req.file,
-            "suivi-gasoil/bons"
+            `suivi-gasoil/${folderCode}/bons`
           );
 
         newImageUrl =
           uploadResult.secure_url;
       }
 
-      gasoil.date =
-        date;
+      gasoil.date = date;
 
       gasoil.autocar =
-        autocar.trim();
+        String(
+          autocar
+        ).trim();
 
       gasoil.depart =
-        depart.trim();
+        String(
+          depart
+        ).trim();
 
       gasoil.quantite =
         quantiteNumber;
 
       gasoil.numeroBon =
-        numeroBon.trim();
+        String(
+          numeroBon
+        ).trim();
 
       gasoil.prixTotal =
         Number(
@@ -734,8 +1088,9 @@ router.put(
         );
 
       gasoil.observation =
-        observation?.trim() ||
-        "";
+        String(
+          observation || ""
+        ).trim();
 
       if (newImageUrl) {
         gasoil.imageBon =
@@ -744,7 +1099,8 @@ router.put(
 
       const actor =
         await getActionUserSnapshot(
-          req
+          req,
+          currentUser
         );
 
       gasoil.updatedBy =
@@ -774,10 +1130,17 @@ router.put(
       }
 
       const populated =
-        await gasoil.populate(
-          "avance",
-          "numeroCheque montant station statut"
-        );
+        await Gasoil.findById(
+          gasoil._id
+        )
+          .populate(
+            "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "centre",
+            "name code active"
+          );
 
       res.json(populated);
     } catch (error) {
@@ -792,10 +1155,12 @@ router.put(
       if (
         error.code === 11000
       ) {
-        return res.status(409).json({
-          message:
-            "Ce numéro de bon existe déjà.",
-        });
+        return res
+          .status(409)
+          .json({
+            message:
+              "Ce numéro de bon existe déjà dans ce centre.",
+          });
       }
 
       res.status(500).json({
@@ -808,55 +1173,73 @@ router.put(
 
 // ==========================================================
 // DELETE
+// ADMIN / SUPER_ADMIN -> any bon in scope
+// USER -> only their own bon
 // ==========================================================
 
 router.delete(
   "/:id",
   async (req, res) => {
     try {
+      const currentUser =
+        await getCurrentUser(
+          req
+        );
+
+      if (!currentUser) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Session utilisateur invalide.",
+          });
+      }
+
       const gasoil =
         await Gasoil.findById(
           req.params.id
         );
 
       if (!gasoil) {
-        return res.status(404).json({
-          message:
-            "Enregistrement introuvable.",
-        });
+        return res
+          .status(404)
+          .json({
+            message:
+              "Enregistrement introuvable.",
+          });
       }
-
-      const currentUser =
-        await User.findById(
-          req.user?.id
-        ).select(
-          "_id role"
-        );
-
-      if (!currentUser) {
-        return res.status(401).json({
-          message:
-            "Utilisateur authentifié introuvable.",
-        });
-      }
-
-      const isAdmin =
-        currentUser.role === "ADMIN";
-
-      const isOwner =
-        gasoil.createdBy &&
-        String(gasoil.createdBy) ===
-          String(currentUser._id);
 
       if (
-        !isAdmin &&
-        !isOwner
+        !canAccessRecord(
+          currentUser,
+          gasoil
+        )
       ) {
-        return res.status(403).json({
-          code: "DELETE_NOT_ALLOWED",
-          message:
-            "Vous ne pouvez pas supprimer un bon créé par un autre utilisateur.",
-        });
+        return res
+          .status(403)
+          .json({
+            message:
+              "Vous ne pouvez supprimer que les bons de votre centre.",
+          });
+      }
+
+      if (
+        currentUser.role ===
+          "USER" &&
+        String(
+          gasoil.createdBy ||
+            ""
+        ) !==
+          String(
+            currentUser._id
+          )
+      ) {
+        return res
+          .status(403)
+          .json({
+            message:
+              "Vous ne pouvez pas supprimer un bon créé par un autre utilisateur.",
+          });
       }
 
       const avance =
@@ -887,7 +1270,10 @@ router.delete(
 
         const activeAdvance =
           await Avance.findOne({
-            statut: "ACTIVE",
+            centre:
+              avance.centre,
+            statut:
+              "ACTIVE",
           });
 
         if (

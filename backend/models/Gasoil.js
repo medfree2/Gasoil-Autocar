@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const gasoilSchema = new mongoose.Schema(
   {
+    centre: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Centre",
+      required: true,
+      index: true,
+    },
+
     date: {
       type: Date,
       required: true,
@@ -29,7 +36,6 @@ const gasoilSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
 
     prixTotal: {
@@ -55,9 +61,6 @@ const gasoilSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Snapshot of the user who originally created the bon.
-    // We keep the display fields too, so the history remains readable
-    // even if the user is renamed later.
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -82,7 +85,6 @@ const gasoilSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Snapshot of the last user who edited the bon.
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -114,6 +116,17 @@ const gasoilSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+gasoilSchema.index(
+  {
+    centre: 1,
+    numeroBon: 1,
+  },
+  {
+    unique: true,
+    name: "centre_numeroBon_unique",
   }
 );
 

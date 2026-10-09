@@ -33,8 +33,15 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["ADMIN", "USER"],
+      enum: ["SUPER_ADMIN", "ADMIN", "USER"],
       default: "USER",
+    },
+
+    centre: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Centre",
+      required: true,
+      index: true,
     },
 
     active: {

@@ -60,6 +60,7 @@ const GASOIL_API = `${API_BASE_URL}/api/gasoil`;
 const AVANCES_API = `${API_BASE_URL}/api/avances`;
 const ACTIVE_AVANCE_API = `${API_BASE_URL}/api/avances/active`;
 const AUTH_API = `${API_BASE_URL}/api/auth`;
+const CENTRES_API = `${API_BASE_URL}/api/centres`;
 
 const DEFAULT_UNIT_PRICE = 16.37;
 
@@ -208,8 +209,21 @@ function App() {
     password: "",
     name: "",
     role: "USER",
+    centre: "",
   });
   const [editingUser, setEditingUser] = useState(null);
+
+  const [centres, setCentres] = useState([]);
+  const [loadingCentres, setLoadingCentres] = useState(false);
+  const [selectedCentreId, setSelectedCentreId] = useState("");
+  const [showCentreForm, setShowCentreForm] = useState(false);
+  const [savingCentre, setSavingCentre] = useState(false);
+  const [editingCentre, setEditingCentre] = useState(null);
+  const [centreForm, setCentreForm] = useState({
+    name: "",
+    code: "",
+    active: true,
+  });
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
@@ -241,6 +255,46 @@ function App() {
     observation: "",
     imageCheque: null,
   });
+
+  const isSuperAdmin =
+    authUser?.role === "SUPER_ADMIN";
+
+  const canManageUsers =
+    ["ADMIN", "SUPER_ADMIN"].includes(
+      authUser?.role
+    );
+
+  const activeCentre = useMemo(() => {
+    const selected =
+      centres.find(
+        (centre) =>
+          String(centre.id) ===
+          String(selectedCentreId)
+      );
+
+    if (selected) {
+      return selected;
+    }
+
+    return authUser?.centre || null;
+  }, [
+    centres,
+    selectedCentreId,
+    authUser,
+  ]);
+
+  const centreScopedUrl = (url) => {
+    if (!selectedCentreId) {
+      return url;
+    }
+
+    const separator =
+      url.includes("?") ? "&" : "?";
+
+    return `${url}${separator}centre=${encodeURIComponent(
+      selectedCentreId
+    )}`;
+  };
 
   // =========================================================
   // AUTHENTICATION
@@ -332,6 +386,9 @@ function App() {
     setRecords([]);
     setAvances([]);
     setActiveAdvance(null);
+    setCentres([]);
+    setSelectedCentreId("");
+    setUsers([]);
     setPage("suivi");
   };
 
@@ -438,63 +495,230 @@ function App() {
   };
 
   // =========================================================
-  // LOAD DATA
+  // MULTI-CENTRE DATA
   // =========================================================
 
+  const loadCentres = async () => {
+    try {
+      setLoadingCentres(true);
+
+      const response =
+        await authFetch(
+          CENTRES_API
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Erreur lors du chargement des centres."
+        );
+      }
+
+      const normalizedCentres = Array.isArray(data)
+        ? data.map((centre) => ({
+            ...centre,
+            id:
+              centre.id ||
+              centre._id ||
+              "",
+            usersCount:
+              centre.usersCount ??
+              centre.stats?.usersCount ??
+              0,
+            bonsCount:
+              centre.bonsCount ??
+              centre.stats?.bonsCount ??
+              0,
+            litres:
+              centre.litres ??
+              centre.stats?.litres ??
+              0,
+            montant:
+              centre.montant ??
+              centre.stats?.montant ??
+              0,
+            avancesCount:
+              centre.avancesCount ??
+              centre.stats?.avancesCount ??
+              0,
+          }))
+        : [];
+
+      setCentres(normalizedCentres);
+
+      if (!normalizedCentres.length) {
+        setSelectedCentreId("");
+        return;
+      }
+
+      const ownCentreId =
+        authUser?.centre?.id ||
+        authUser?.centre?._id ||
+        "";
+
+      const currentStillExists =
+        normalizedCentres.some(
+          (centre) =>
+            String(centre.id) ===
+              String(
+                selectedCentreId
+              ) &&
+            centre.active !== false
+        );
+
+      if (
+        currentStillExists
+      ) {
+        return;
+      }
+
+      if (
+        !isSuperAdmin &&
+        ownCentreId
+      ) {
+        setSelectedCentreId(
+          String(ownCentreId)
+        );
+        return;
+      }
+
+      const preferred =
+        normalizedCentres.find(
+          (centre) =>
+            String(centre.id) ===
+              String(
+                ownCentreId
+              ) &&
+            centre.active !== false
+        ) ||
+        normalizedCentres.find(
+          (centre) =>
+            centre.active !==
+            false
+        ) ||
+        normalizedCentres[0];
+
+      setSelectedCentreId(
+        String(preferred.id)
+      );
+    } catch (error) {
+      setMessage(
+        error.message
+      );
+    } finally {
+      setLoadingCentres(false);
+    }
+  };
+
   const loadRecords = async () => {
+    if (!selectedCentreId) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      const response = await authFetch(GASOIL_API);
-      const data = await response.json();
+      const response =
+        await authFetch(
+          centreScopedUrl(
+            GASOIL_API
+          )
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Erreur de chargement des bons.");
+        throw new Error(
+          data.message ||
+            "Erreur de chargement des bons."
+        );
       }
 
       setRecords(data);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const loadAvances = async () => {
+    if (!selectedCentreId) {
+      setAvances([]);
+      setActiveAdvance(null);
+      setLoadingAvances(false);
+      return;
+    }
+
     try {
       setLoadingAvances(true);
 
-      const [allResponse, activeResponse] = await Promise.all([
-        authFetch(AVANCES_API),
-        authFetch(ACTIVE_AVANCE_API),
+      const [
+        allResponse,
+        activeResponse,
+      ] = await Promise.all([
+        authFetch(
+          centreScopedUrl(
+            AVANCES_API
+          )
+        ),
+        authFetch(
+          centreScopedUrl(
+            ACTIVE_AVANCE_API
+          )
+        ),
       ]);
 
-      const allData = await allResponse.json();
-      const activeData = await activeResponse.json();
+      const allData =
+        await allResponse.json();
+
+      const activeData =
+        await activeResponse.json();
 
       if (!allResponse.ok) {
         throw new Error(
-          allData.message || "Erreur de chargement des avances."
+          allData.message ||
+            "Erreur de chargement des avances."
         );
       }
 
       if (!activeResponse.ok) {
         throw new Error(
-          activeData.message || "Erreur de chargement de l'avance active."
+          activeData.message ||
+            "Erreur de chargement de l'avance active."
         );
       }
 
       setAvances(allData);
-      setActiveAdvance(activeData);
+      setActiveAdvance(
+        activeData
+      );
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message
+      );
     } finally {
       setLoadingAvances(false);
     }
   };
 
   const refreshAll = async () => {
-    await Promise.all([loadRecords(), loadAvances()]);
+    if (!selectedCentreId) {
+      return;
+    }
+
+    await Promise.all([
+      loadRecords(),
+      loadAvances(),
+    ]);
   };
 
   useEffect(() => {
@@ -502,26 +726,47 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (authUser && authToken) {
+    if (
+      authUser &&
+      authToken
+    ) {
+      loadCentres();
+    }
+  }, [
+    authUser,
+    authToken,
+  ]);
+
+  useEffect(() => {
+    if (
+      authUser &&
+      authToken &&
+      selectedCentreId
+    ) {
       refreshAll();
     }
-  }, [authUser, authToken]);
+  }, [
+    authUser,
+    authToken,
+    selectedCentreId,
+  ]);
 
   // =========================================================
-  // ADMIN USERS
+  // USERS + CENTRES ADMINISTRATION
   // =========================================================
 
   const loadUsers = async () => {
-    if (authUser?.role !== "ADMIN") {
+    if (!canManageUsers) {
       return;
     }
 
     try {
       setLoadingUsers(true);
 
-      const response = await authFetch(
-        `${AUTH_API}/users`
-      );
+      const response =
+        await authFetch(
+          `${AUTH_API}/users`
+        );
 
       const data =
         await response.json();
@@ -535,7 +780,9 @@ function App() {
 
       setUsers(data);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message
+      );
     } finally {
       setLoadingUsers(false);
     }
@@ -544,11 +791,27 @@ function App() {
   useEffect(() => {
     if (
       page === "users" &&
-      authUser?.role === "ADMIN"
+      canManageUsers
     ) {
       loadUsers();
     }
-  }, [page, authUser]);
+
+    if (
+      page === "centres" &&
+      isSuperAdmin
+    ) {
+      loadCentres();
+    }
+  }, [
+    page,
+    authUser,
+  ]);
+
+  const defaultUserCentreId =
+    selectedCentreId ||
+    authUser?.centre?.id ||
+    authUser?.centre?._id ||
+    "";
 
   const openUserForm = () => {
     setEditingUser(null);
@@ -558,19 +821,30 @@ function App() {
       password: "",
       name: "",
       role: "USER",
+      centre:
+        defaultUserCentreId,
     });
 
     setShowUserForm(true);
   };
 
-  const openEditUserForm = (user) => {
+  const openEditUserForm = (
+    user
+  ) => {
     setEditingUser(user);
 
     setUserForm({
-      matricule: user.matricule || "",
+      matricule:
+        user.matricule || "",
       password: "",
-      name: user.name || "",
-      role: user.role || "USER",
+      name:
+        user.name || "",
+      role:
+        user.role || "USER",
+      centre:
+        user.centre?.id ||
+        user.centre?._id ||
+        defaultUserCentreId,
     });
 
     setShowUserForm(true);
@@ -585,6 +859,8 @@ function App() {
       password: "",
       name: "",
       role: "USER",
+      centre:
+        defaultUserCentreId,
     });
   };
 
@@ -596,10 +872,12 @@ function App() {
       value,
     } = event.target;
 
-    setUserForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setUserForm(
+      (prev) => ({
+        ...prev,
+        [name]: value,
+      })
+    );
   };
 
   const handleSaveUser = async (
@@ -614,15 +892,17 @@ function App() {
       const payload = {
         matricule:
           userForm.matricule,
-
         name:
           userForm.name,
-
         role:
           userForm.role,
+        centre:
+          userForm.centre,
       };
 
-      if (userForm.password) {
+      if (
+        userForm.password
+      ) {
         payload.password =
           userForm.password;
       }
@@ -637,12 +917,10 @@ function App() {
               editingUser
                 ? "PUT"
                 : "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
             },
-
             body:
               JSON.stringify(
                 payload
@@ -664,8 +942,11 @@ function App() {
 
       closeUserForm();
       await loadUsers();
+      await loadCentres();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message
+      );
     } finally {
       setSavingUser(false);
     }
@@ -702,8 +983,166 @@ function App() {
       }
 
       await loadUsers();
+      await loadCentres();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.message
+      );
+    }
+  };
+
+  const openCentreForm = (
+    centre = null
+  ) => {
+    setEditingCentre(
+      centre
+    );
+
+    setCentreForm({
+      name:
+        centre?.name || "",
+      code:
+        centre?.code || "",
+      active:
+        centre?.active !==
+        false,
+    });
+
+    setShowCentreForm(true);
+  };
+
+  const closeCentreForm = () => {
+    setShowCentreForm(false);
+    setEditingCentre(null);
+    setCentreForm({
+      name: "",
+      code: "",
+      active: true,
+    });
+  };
+
+  const handleCentreFormChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+      type,
+      checked,
+    } = event.target;
+
+    setCentreForm(
+      (prev) => ({
+        ...prev,
+        [name]:
+          type ===
+          "checkbox"
+            ? checked
+            : value,
+      })
+    );
+  };
+
+  const handleSaveCentre = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    try {
+      setSavingCentre(true);
+      setMessage("");
+
+      const response =
+        await authFetch(
+          editingCentre
+            ? `${CENTRES_API}/${editingCentre.id}`
+            : CENTRES_API,
+          {
+            method:
+              editingCentre
+                ? "PUT"
+                : "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body:
+              JSON.stringify(
+                centreForm
+              ),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Erreur lors de l'enregistrement du centre."
+        );
+      }
+
+      closeCentreForm();
+      await loadCentres();
+
+      const savedCentreId =
+        data?.id ||
+        data?._id ||
+        "";
+
+      if (
+        !editingCentre &&
+        savedCentreId
+      ) {
+        setSelectedCentreId(
+          String(savedCentreId)
+        );
+      }
+    } catch (error) {
+      setMessage(
+        error.message
+      );
+    } finally {
+      setSavingCentre(false);
+    }
+  };
+
+  const handleDeleteCentre = async (
+    centre
+  ) => {
+    if (
+      !window.confirm(
+        `Supprimer le centre ${centre.name} ?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response =
+        await authFetch(
+          `${CENTRES_API}/${centre.id}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Erreur lors de la suppression du centre."
+        );
+      }
+
+      await loadCentres();
+    } catch (error) {
+      setMessage(
+        error.message
+      );
     }
   };
 
@@ -1021,6 +1460,7 @@ function App() {
       formData.append("numeroBon", form.numeroBon);
       formData.append("prixTotal", form.prixTotal);
       formData.append("observation", form.observation);
+      formData.append("centre", selectedCentreId);
 
       if (form.imageBon) {
         formData.append("imageBon", form.imageBon);
@@ -1168,6 +1608,7 @@ function App() {
       formData.append("station", advanceForm.station);
       formData.append("banque", advanceForm.banque);
       formData.append("observation", advanceForm.observation);
+      formData.append("centre", selectedCentreId);
 
       if (advanceForm.imageCheque) {
         formData.append("imageCheque", advanceForm.imageCheque);
@@ -1428,7 +1869,7 @@ function App() {
       worksheet.getCell("A2");
 
     subtitleCell.value =
-      `État des prises gasoil • ${stationName} • ${displayDate}`;
+      `État des prises gasoil • ${activeCentre?.name || "Centre"} • ${stationName} • ${displayDate}`;
 
     subtitleCell.font = {
       name: "Aptos",
@@ -2263,24 +2704,24 @@ function App() {
   return (
     <div className="min-h-screen bg-[#f3f6fb] text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-6 py-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
+        <div className="mx-auto flex max-w-[1760px] items-center justify-between gap-3 px-4 py-4 xl:px-6">
+          <div className="flex min-w-0 shrink-0 items-center gap-3 xl:gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
               <BusFront size={25} />
             </div>
 
-            <div>
-              <h1 className="text-xl font-black tracking-tight md:text-2xl">
+            <div className="min-w-0">
+              <h1 className="whitespace-nowrap text-xl font-black tracking-tight xl:text-2xl">
                 Suivi Gasoil Autocar
               </h1>
-              <p className="text-xs text-slate-500 md:text-sm">
+              <p className="hidden whitespace-nowrap text-xs text-slate-500 2xl:block 2xl:text-sm">
                 Suivi quotidien des bons et avances station
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden rounded-xl bg-slate-100 p-1 lg:flex">
+          <div className="flex min-w-0 items-center gap-2 xl:gap-3">
+            <div className="hidden shrink-0 rounded-xl bg-slate-100 p-1 lg:flex">
               <NavButton
                 active={page === "suivi"}
                 onClick={() => setPage("suivi")}
@@ -2302,7 +2743,7 @@ function App() {
                 label="Avances station"
               />
 
-              {authUser.role === "ADMIN" && (
+              {canManageUsers && (
                 <NavButton
                   active={page === "users"}
                   onClick={() => setPage("users")}
@@ -2310,9 +2751,63 @@ function App() {
                   label="Utilisateurs"
                 />
               )}
+
+              {isSuperAdmin && (
+                <NavButton
+                  active={page === "centres"}
+                  onClick={() => setPage("centres")}
+                  icon={<Landmark size={17} />}
+                  label="Centres"
+                />
+              )}
             </div>
 
-            <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 xl:flex">
+            <div className="hidden shrink-0 items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 px-3 py-2 md:flex">
+              <Landmark
+                size={17}
+                className="text-blue-600"
+              />
+
+              {isSuperAdmin ? (
+                <select
+                  value={selectedCentreId}
+                  onChange={(event) => {
+                    setRecords([]);
+                    setAvances([]);
+                    setActiveAdvance(null);
+                    setSelectedCentreId(
+                      event.target.value
+                    );
+                    setPage("suivi");
+                  }}
+                  disabled={loadingCentres}
+                  className="max-w-44 bg-transparent text-sm font-black text-blue-950 outline-none"
+                >
+                  {centres
+                    .filter(
+                      (centre) =>
+                        centre.active !== false
+                    )
+                    .map(
+                      (centre) => (
+                        <option
+                          key={centre.id}
+                          value={centre.id}
+                        >
+                          {centre.name}
+                        </option>
+                      )
+                    )}
+                </select>
+              ) : (
+                <span className="max-w-36 truncate text-sm font-black text-blue-950">
+                  {activeCentre?.name ||
+                    "Centre"}
+                </span>
+              )}
+            </div>
+
+            <div className="hidden shrink-0 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 2xl:flex">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-900 to-blue-900 text-white">
                 <UserRound size={17} />
               </div>
@@ -2323,6 +2818,9 @@ function App() {
                 </p>
                 <p className="truncate text-[11px] font-semibold text-slate-400">
                   {authUser.matricule || authUser.email}
+                </p>
+                <p className="truncate text-[10px] font-bold text-blue-500">
+                  {authUser.role} · {activeCentre?.code || authUser.centre?.code || "—"}
                 </p>
               </div>
 
@@ -2346,36 +2844,46 @@ function App() {
             <button
               onClick={openPasswordForm}
               title="Changer mon mot de passe"
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 xl:hidden"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 2xl:hidden"
             >
               <KeyRound size={18} />
             </button>
 
             {page === "avances" ? (
-              <button
-                onClick={openAdvanceForm}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5"
-              >
-                <Plus size={18} />
-                Nouvelle avance
-              </button>
-            ) : page === "users" && authUser.role === "ADMIN" ? (
+              canManageUsers ? (
+                <button
+                  onClick={openAdvanceForm}
+                  className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5"
+                >
+                  <Plus size={18} />
+                  Nouvelle avance
+                </button>
+              ) : null
+            ) : page === "users" && canManageUsers ? (
               <button
                 onClick={openUserForm}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5"
+                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5"
               >
                 <UserPlus size={18} />
                 Nouveau compte
               </button>
-            ) : (
+            ) : page === "centres" && isSuperAdmin ? (
+              <button
+                onClick={() => openCentreForm()}
+                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-blue-900 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5"
+              >
+                <Plus size={18} />
+                Nouveau centre
+              </button>
+            ) : page === "suivi" ? (
               <button
                 onClick={openForm}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5"
+                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5"
               >
                 <Plus size={18} />
                 Nouveau bon
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
@@ -2402,6 +2910,11 @@ function App() {
                 <h2 className="mt-1 text-3xl font-black capitalize">
                   {selectedDateLabel}
                 </h2>
+
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-blue-700">
+                  <Landmark size={14} />
+                  Centre {activeCentre?.name || "—"}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -2732,7 +3245,9 @@ function App() {
                                 />
                               </button>
 
-                              {(authUser.role === "ADMIN" ||
+                              {(["ADMIN", "SUPER_ADMIN"].includes(
+                                  authUser.role
+                                ) ||
                                 String(item.createdBy || "") ===
                                   String(authUser.id || "")) && (
                                 <button
@@ -2871,18 +3386,49 @@ function App() {
             health={advanceHealth}
             percentUsed={advancePercentUsed}
             remainingPercent={advanceRemainingPercent}
-            onNewAdvance={openAdvanceForm}
+            onNewAdvance={
+              canManageUsers
+                ? openAdvanceForm
+                : null
+            }
           />
         )}
 
-        {page === "users" && authUser.role === "ADMIN" && (
+        {page === "users" && canManageUsers && (
           <UsersPage
             users={users}
             loading={loadingUsers}
             currentUser={authUser}
+            centres={centres}
             onNewUser={openUserForm}
             onEditUser={openEditUserForm}
             onDeleteUser={handleDeleteUser}
+          />
+        )}
+
+        {page === "centres" && isSuperAdmin && (
+          <CentresPage
+            centres={centres}
+            loading={loadingCentres}
+            selectedCentreId={selectedCentreId}
+            onSelectCentre={(centreId) => {
+              setRecords([]);
+              setAvances([]);
+              setActiveAdvance(null);
+              setSelectedCentreId(
+                String(centreId)
+              );
+              setPage("suivi");
+            }}
+            onNewCentre={() =>
+              openCentreForm()
+            }
+            onEditCentre={
+              openCentreForm
+            }
+            onDeleteCentre={
+              handleDeleteCentre
+            }
           />
         )}
       </main>
@@ -3011,7 +3557,7 @@ function App() {
       )}
 
       {/* USER MODAL */}
-      {showUserForm && authUser.role === "ADMIN" && (
+      {showUserForm && canManageUsers && (
         <ModalShell
           title={
             editingUser
@@ -3037,15 +3583,19 @@ function App() {
 
                 <div>
                   <p className="font-black text-violet-950">
-                    {userForm.role === "ADMIN"
+                    {userForm.role === "SUPER_ADMIN"
+                      ? "Compte super administrateur"
+                      : userForm.role === "ADMIN"
                       ? "Compte administrateur"
                       : "Compte utilisateur"}
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-violet-700">
-                    {userForm.role === "ADMIN"
-                      ? "Cet administrateur aura accès à la gestion des utilisateurs et pourra supprimer tous les bons."
-                      : "Cet utilisateur pourra se connecter et ne pourra supprimer que les bons qu'il a lui-même créés."}
+                    {userForm.role === "SUPER_ADMIN"
+                      ? "Ce compte aura accès à tous les centres, à la gestion des centres et à tous les utilisateurs."
+                      : userForm.role === "ADMIN"
+                      ? "Cet administrateur gérera les utilisateurs, les avances et les bons de son centre."
+                      : "Cet utilisateur travaillera uniquement dans son centre et ne pourra supprimer que ses propres bons."}
                   </p>
                 </div>
               </div>
@@ -3086,6 +3636,46 @@ function App() {
                   <option value="ADMIN">
                     ADMIN — Administrateur
                   </option>
+                  {isSuperAdmin && (
+                    <option value="SUPER_ADMIN">
+                      SUPER_ADMIN — Tous les centres
+                    </option>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Centre
+                </label>
+
+                <select
+                  name="centre"
+                  value={userForm.centre}
+                  onChange={handleUserFormChange}
+                  disabled={!isSuperAdmin}
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100 disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="">
+                    Sélectionner un centre
+                  </option>
+
+                  {centres
+                    .filter(
+                      (centre) =>
+                        centre.active !== false
+                    )
+                    .map(
+                      (centre) => (
+                        <option
+                          key={centre.id}
+                          value={centre.id}
+                        >
+                          {centre.name} ({centre.code})
+                        </option>
+                      )
+                    )}
                 </select>
               </div>
 
@@ -3133,6 +3723,103 @@ function App() {
                   : editingUser
                   ? "Enregistrer les modifications"
                   : "Créer le compte"}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {/* CENTRE MODAL */}
+      {showCentreForm && isSuperAdmin && (
+        <ModalShell
+          title={
+            editingCentre
+              ? "Modifier le centre"
+              : "Nouveau centre"
+          }
+          eyebrow="Administration multi-centre"
+          onClose={closeCentreForm}
+        >
+          <form
+            onSubmit={handleSaveCentre}
+            className="p-7"
+          >
+            <div className="mb-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-900 to-blue-900 text-white">
+                  <Landmark size={20} />
+                </div>
+
+                <div>
+                  <p className="font-black text-slate-950">
+                    Centre d'exploitation
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Chaque centre possède ses propres bons, avances, utilisateurs et statistiques.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <Field
+                label="Nom du centre"
+                name="name"
+                placeholder="Ex : Casablanca"
+                value={centreForm.name}
+                onChange={handleCentreFormChange}
+              />
+
+              <Field
+                label="Code"
+                name="code"
+                placeholder="Ex : CAS"
+                value={centreForm.code}
+                onChange={handleCentreFormChange}
+              />
+
+              {editingCentre && (
+                <label className="md:col-span-2 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+                  <div>
+                    <p className="font-black text-slate-800">
+                      Centre actif
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Un centre désactivé n'est plus disponible pour les utilisateurs.
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    name="active"
+                    checked={centreForm.active}
+                    onChange={handleCentreFormChange}
+                    className="h-5 w-5 rounded border-slate-300"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="mt-7 flex justify-end gap-3 border-t border-slate-100 pt-5">
+              <button
+                type="button"
+                onClick={closeCentreForm}
+                className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="submit"
+                disabled={savingCentre}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-blue-900 px-7 py-3 font-bold text-white shadow-lg shadow-blue-200 disabled:opacity-50"
+              >
+                <Landmark size={18} />
+                {savingCentre
+                  ? "Enregistrement..."
+                  : editingCentre
+                  ? "Enregistrer"
+                  : "Créer le centre"}
               </button>
             </div>
           </form>
@@ -3966,6 +4653,7 @@ function UsersPage({
   users,
   loading,
   currentUser,
+  centres,
   onNewUser,
   onEditUser,
   onDeleteUser,
@@ -3973,7 +4661,20 @@ function UsersPage({
   const regularUsers =
     users.filter(
       (user) =>
-        user.role !== "ADMIN"
+        user.role === "USER"
+    );
+
+  const admins =
+    users.filter(
+      (user) =>
+        user.role === "ADMIN"
+    );
+
+  const superAdmins =
+    users.filter(
+      (user) =>
+        user.role ===
+        "SUPER_ADMIN"
     );
 
   return (
@@ -3981,7 +4682,7 @@ function UsersPage({
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-slate-400">
-            Administration
+            Administration multi-centre
           </p>
 
           <h2 className="mt-1 text-3xl font-black">
@@ -3989,7 +4690,7 @@ function UsersPage({
           </h2>
 
           <p className="mt-2 text-sm text-slate-500">
-            Créez des comptes USER ou ADMIN par matricule et mot de passe.
+            Affectez chaque compte à un centre et définissez son niveau d'accès.
           </p>
         </div>
 
@@ -4002,7 +4703,7 @@ function UsersPage({
         </button>
       </div>
 
-      <div className="mb-7 grid gap-4 sm:grid-cols-3">
+      <div className="mb-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <AdvanceSummaryCard
           icon={<UsersRound />}
           label="Utilisateurs"
@@ -4013,20 +4714,22 @@ function UsersPage({
         <AdvanceSummaryCard
           icon={<ShieldCheck />}
           label="Administrateurs"
-          value={
-            users.filter(
-              (user) =>
-                user.role === "ADMIN"
-            ).length
-          }
+          value={admins.length}
           tone="violet"
         />
 
         <AdvanceSummaryCard
-          icon={<KeyRound />}
-          label="Mode de connexion"
-          value="Matricule"
+          icon={<Landmark />}
+          label="Super admins"
+          value={superAdmins.length}
           tone="emerald"
+        />
+
+        <AdvanceSummaryCard
+          icon={<Landmark />}
+          label="Centres visibles"
+          value={centres.length}
+          tone="amber"
         />
       </div>
 
@@ -4063,23 +4766,18 @@ function UsersPage({
                   <th className="px-6 py-4">
                     Matricule
                   </th>
-
                   <th className="px-6 py-4">
                     Nom
                   </th>
-
+                  <th className="px-6 py-4">
+                    Centre
+                  </th>
                   <th className="px-6 py-4">
                     Rôle
                   </th>
-
                   <th className="px-6 py-4">
                     Créé le
                   </th>
-
-                  <th className="px-6 py-4">
-                    Statut
-                  </th>
-
                   <th className="px-6 py-4"></th>
                 </tr>
               </thead>
@@ -4094,12 +4792,17 @@ function UsersPage({
                       <td className="px-6 py-5">
                         <span
                           className={`rounded-lg px-3 py-2 font-black ${
-                            user.role === "ADMIN"
+                            user.role ===
+                            "SUPER_ADMIN"
+                              ? "bg-slate-900 text-white"
+                              : user.role ===
+                                "ADMIN"
                               ? "bg-violet-50 text-violet-700"
                               : "bg-blue-50 text-blue-700"
                           }`}
                         >
-                          {user.matricule || "—"}
+                          {user.matricule ||
+                            "—"}
                         </span>
                       </td>
 
@@ -4108,10 +4811,31 @@ function UsersPage({
                       </td>
 
                       <td className="px-6 py-5">
+                        <div className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2">
+                          <Landmark
+                            size={14}
+                            className="text-blue-600"
+                          />
+                          <span className="text-sm font-black text-slate-700">
+                            {user.centre?.name ||
+                              "—"}
+                          </span>
+                          {user.centre?.code && (
+                            <span className="text-[10px] font-black text-slate-400">
+                              {user.centre.code}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-5">
                         <span
                           className={`rounded-full px-3 py-1.5 text-xs font-black ${
                             user.role ===
-                            "ADMIN"
+                            "SUPER_ADMIN"
+                              ? "bg-slate-900 text-white"
+                              : user.role ===
+                                "ADMIN"
                               ? "bg-violet-50 text-violet-700"
                               : "bg-slate-100 text-slate-600"
                           }`}
@@ -4127,12 +4851,6 @@ function UsersPage({
                       </td>
 
                       <td className="px-6 py-5">
-                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
-                          ACTIF
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-5">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() =>
@@ -4145,7 +4863,9 @@ function UsersPage({
                           </button>
 
                           {String(user.id) !==
-                            String(currentUser?.id) && (
+                            String(
+                              currentUser?.id
+                            ) && (
                             <button
                               onClick={() =>
                                 onDeleteUser(
@@ -4155,9 +4875,7 @@ function UsersPage({
                               title="Supprimer"
                               className="rounded-xl bg-red-50 p-2.5 text-red-500 transition hover:bg-red-100"
                             >
-                              <Trash2
-                                size={17}
-                              />
+                              <Trash2 size={17} />
                             </button>
                           )}
                         </div>
@@ -4170,6 +4888,255 @@ function UsersPage({
           </div>
         )}
       </section>
+    </>
+  );
+}
+
+// ===========================================================
+// CENTRES PAGE - SUPER ADMIN
+// ===========================================================
+
+function CentresPage({
+  centres,
+  loading,
+  selectedCentreId,
+  onSelectCentre,
+  onNewCentre,
+  onEditCentre,
+  onDeleteCentre,
+}) {
+  const totalLitres =
+    centres.reduce(
+      (sum, centre) =>
+        sum +
+        Number(
+          centre.litres || 0
+        ),
+      0
+    );
+
+  const totalMontant =
+    centres.reduce(
+      (sum, centre) =>
+        sum +
+        Number(
+          centre.montant || 0
+        ),
+      0
+    );
+
+  return (
+    <>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-400">
+            Super administration
+          </p>
+
+          <h2 className="mt-1 text-3xl font-black">
+            Centres
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Marrakech, Casablanca, Fès, Agadir et tous les futurs centres dans une seule application.
+          </p>
+        </div>
+
+        <button
+          onClick={onNewCentre}
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-blue-900 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200"
+        >
+          <Plus size={18} />
+          Nouveau centre
+        </button>
+      </div>
+
+      <div className="mb-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AdvanceSummaryCard
+          icon={<Landmark />}
+          label="Centres"
+          value={centres.length}
+          tone="blue"
+        />
+
+        <AdvanceSummaryCard
+          icon={<UsersRound />}
+          label="Utilisateurs"
+          value={centres.reduce(
+            (sum, centre) =>
+              sum +
+              Number(
+                centre.usersCount ||
+                  0
+              ),
+            0
+          )}
+          tone="violet"
+        />
+
+        <AdvanceSummaryCard
+          icon={<Fuel />}
+          label="Litres"
+          value={`${formatNumber(
+            totalLitres
+          )} L`}
+          tone="emerald"
+        />
+
+        <AdvanceSummaryCard
+          icon={<Wallet />}
+          label="Montant"
+          value={`${formatMoney(
+            totalMontant
+          )} DH`}
+          tone="amber"
+        />
+      </div>
+
+      {loading ? (
+        <div className="rounded-3xl bg-white p-16 text-center text-slate-400 shadow-sm">
+          Chargement des centres...
+        </div>
+      ) : (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {centres.map(
+            (centre) => {
+              const selected =
+                String(
+                  centre.id
+                ) ===
+                String(
+                  selectedCentreId
+                );
+
+              return (
+                <section
+                  key={centre.id}
+                  className={`relative overflow-hidden rounded-3xl border bg-white p-6 shadow-xl shadow-slate-200/50 transition ${
+                    selected
+                      ? "border-blue-300 ring-4 ring-blue-100"
+                      : "border-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-blue-900 text-white">
+                        <Landmark size={22} />
+                      </div>
+
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">
+                          {centre.name}
+                        </h3>
+                        <p className="mt-1 text-xs font-black uppercase tracking-widest text-blue-500">
+                          {centre.code}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-black ${
+                        centre.active
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {centre.active
+                        ? "ACTIF"
+                        : "INACTIF"}
+                    </span>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs font-bold text-slate-400">
+                        Utilisateurs
+                      </p>
+                      <p className="mt-1 text-xl font-black">
+                        {centre.usersCount ||
+                          0}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-blue-50 p-4">
+                      <p className="text-xs font-bold text-blue-400">
+                        Bons
+                      </p>
+                      <p className="mt-1 text-xl font-black text-blue-800">
+                        {centre.bonsCount ||
+                          0}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-emerald-50 p-4">
+                      <p className="text-xs font-bold text-emerald-500">
+                        Gasoil
+                      </p>
+                      <p className="mt-1 text-lg font-black text-emerald-800">
+                        {formatNumber(
+                          centre.litres
+                        )}{" "}
+                        L
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl bg-violet-50 p-4">
+                      <p className="text-xs font-bold text-violet-500">
+                        Montant
+                      </p>
+                      <p className="mt-1 text-lg font-black text-violet-800">
+                        {formatMoney(
+                          centre.montant
+                        )}{" "}
+                        DH
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {centre.active && (
+                      <button
+                        onClick={() =>
+                          onSelectCentre(
+                            centre.id
+                          )
+                        }
+                        className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-700"
+                      >
+                        Ouvrir
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() =>
+                        onEditCentre(
+                          centre
+                        )
+                      }
+                      className="rounded-xl bg-slate-100 p-2.5 text-slate-600 transition hover:bg-slate-200"
+                      title="Modifier"
+                    >
+                      <Pencil size={17} />
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        onDeleteCentre(
+                          centre
+                        )
+                      }
+                      className="rounded-xl bg-red-50 p-2.5 text-red-500 transition hover:bg-red-100"
+                      title="Supprimer"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                </section>
+              );
+            }
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -4208,13 +5175,15 @@ function AdvancePage({
           </p>
         </div>
 
-        <button
-          onClick={onNewAdvance}
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200"
-        >
-          <Plus size={18} />
-          Nouvelle avance
-        </button>
+        {onNewAdvance && (
+          <button
+            onClick={onNewAdvance}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200"
+          >
+            <Plus size={18} />
+            Nouvelle avance
+          </button>
+        )}
       </div>
 
       {!activeAdvance ? (
@@ -4229,12 +5198,14 @@ function AdvancePage({
             ensuite déduits automatiquement de son montant.
           </p>
 
-          <button
-            onClick={onNewAdvance}
-            className="mt-6 rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white"
-          >
-            + Ajouter la première avance
-          </button>
+          {onNewAdvance && (
+            <button
+              onClick={onNewAdvance}
+              className="mt-6 rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white"
+            >
+              + Ajouter la première avance
+            </button>
+          )}
         </section>
       ) : (
         <>
@@ -4472,7 +5443,7 @@ function NavButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+      className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-bold transition xl:px-4 ${
         active
           ? "bg-white text-blue-700 shadow-sm"
           : "text-slate-500 hover:text-slate-800"
