@@ -362,52 +362,233 @@ const canAccessRecord = (
   );
 };
 
-const getRemainingBalance =
+const getUsedAmountForAdvance =
   async (
     avance,
     excludeGasoilId = null
   ) => {
-    const match = {
-      avance: avance._id,
+    const query = {
       centre: avance.centre,
+      $or: [
+        {
+          "allocations.avance":
+            avance._id,
+        },
+        {
+          avance:
+            avance._id,
+        },
+      ],
     };
 
     if (excludeGasoilId) {
-      match._id = {
+      query._id = {
         $ne:
           excludeGasoilId,
       };
     }
 
-    const result =
-      await Gasoil.aggregate([
-        {
-          $match: match,
-        },
-        {
-          $group: {
-            _id: null,
-            total: {
-              $sum:
-                "$prixTotal",
-            },
-          },
-        },
-      ]);
+    const bons =
+      await Gasoil.find(
+        query
+      )
+        .select(
+          "avance allocations prixTotal"
+        )
+        .lean();
 
+    const avanceId =
+      String(
+        avance._id
+      );
+
+    let used = 0;
+
+    for (const bon of bons) {
+      const allocations =
+        Array.isArray(
+          bon.allocations
+        )
+          ? bon.allocations
+          : [];
+
+      const matching =
+        allocations.find(
+          (item) =>
+            String(
+              item.avance
+            ) === avanceId
+        );
+
+      if (matching) {
+        used +=
+          Number(
+            matching.montant ||
+              0
+          );
+      } else if (
+        allocations.length ===
+          0 &&
+        String(
+          bon.avance || ""
+        ) === avanceId
+      ) {
+        // Legacy bon: its full amount belongs to its old single advance.
+        used +=
+          Number(
+            bon.prixTotal || 0
+          );
+      }
+    }
+
+    return Number(
+      used.toFixed(2)
+    );
+  };
+
+const getRemainingBalance =
+  async (
+    avance,
+    excludeGasoilId = null
+  ) => {
     const used =
-      Number(
-        result[0]?.total ||
-          0
+      await getUsedAmountForAdvance(
+        avance,
+        excludeGasoilId
       );
 
     return {
       used,
       remaining:
         Number(
-          avance.montant
-        ) - used,
+          (
+            Number(
+              avance.montant
+            ) - used
+          ).toFixed(2)
+        ),
     };
+  };
+
+const buildFifoAllocations =
+  async (
+    centreId,
+    montant,
+    excludeGasoilId = null
+  ) => {
+    const avances =
+      await Avance.find({
+        centre: centreId,
+      }).sort({
+        date: 1,
+        createdAt: 1,
+      });
+
+    let aRepartir =
+      Number(
+        Number(
+          montant
+        ).toFixed(2)
+      );
+
+    const allocations = [];
+    let totalDisponible = 0;
+
+    for (const avance of avances) {
+      const balance =
+        await getRemainingBalance(
+          avance,
+          excludeGasoilId
+        );
+
+      const disponible =
+        Math.max(
+          Number(
+            balance.remaining
+          ),
+          0
+        );
+
+      totalDisponible +=
+        disponible;
+
+      if (
+        aRepartir <= 0.005 ||
+        disponible <= 0.005
+      ) {
+        continue;
+      }
+
+      const montantPris =
+        Number(
+          Math.min(
+            disponible,
+            aRepartir
+          ).toFixed(2)
+        );
+
+      allocations.push({
+        avance:
+          avance._id,
+        montant:
+          montantPris,
+      });
+
+      aRepartir =
+        Number(
+          (
+            aRepartir -
+            montantPris
+          ).toFixed(2)
+        );
+    }
+
+    return {
+      allocations,
+      manque:
+        Math.max(
+          aRepartir,
+          0
+        ),
+      totalDisponible:
+        Number(
+          totalDisponible.toFixed(
+            2
+          )
+        ),
+    };
+  };
+
+const syncCentreAdvanceStatuses =
+  async (
+    centreId
+  ) => {
+    const avances =
+      await Avance.find({
+        centre: centreId,
+      });
+
+    for (const avance of avances) {
+      const balance =
+        await getRemainingBalance(
+          avance
+        );
+
+      const expectedStatus =
+        balance.remaining > 0.005
+          ? "ACTIVE"
+          : "CLOTUREE";
+
+      if (
+        avance.statut !==
+        expectedStatus
+      ) {
+        avance.statut =
+          expectedStatus;
+
+        await avance.save();
+      }
+    }
   };
 
 // ==========================================================
@@ -455,6 +636,10 @@ router.get(
         )
           .populate(
             "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "allocations.avance",
             "numeroCheque montant station statut centre"
           )
           .populate(
@@ -506,6 +691,10 @@ router.get(
         )
           .populate(
             "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "allocations.avance",
             "numeroCheque montant station statut centre"
           )
           .populate(
@@ -659,49 +848,6 @@ router.post(
           });
       }
 
-      // Use the oldest ACTIVE advance first.
-      // A new cheque does not close an older cheque that still has a balance.
-      const activeAdvances =
-        await Avance.find({
-          centre:
-            centre._id,
-          statut:
-            "ACTIVE",
-        }).sort({
-          date: 1,
-          createdAt: 1,
-        });
-
-      let avance = null;
-      let remaining = 0;
-
-      for (const candidate of activeAdvances) {
-        const balance =
-          await getRemainingBalance(
-            candidate
-          );
-
-        if (balance.remaining > 0.005) {
-          avance = candidate;
-          remaining = balance.remaining;
-          break;
-        }
-
-        candidate.statut = "CLOTUREE";
-        await candidate.save();
-      }
-
-      if (!avance) {
-        return res
-          .status(400)
-          .json({
-            code:
-              "NO_ACTIVE_ADVANCE",
-            message:
-              "Aucune avance active pour ce centre. Ajoutez d'abord un nouveau chèque d'avance.",
-          });
-      }
-
       const quantiteNumber =
         Number(quantite);
 
@@ -726,9 +872,17 @@ router.post(
           });
       }
 
+      // FIFO: consume the oldest cheque first, then continue
+      // automatically on the next cheque if necessary.
+      const allocationResult =
+        await buildFifoAllocations(
+          centre._id,
+          prixTotalNumber
+        );
+
       if (
-        prixTotalNumber >
-        remaining + 0.005
+        allocationResult.manque >
+        0.005
       ) {
         return res
           .status(409)
@@ -736,20 +890,30 @@ router.post(
             code:
               "INSUFFICIENT_ADVANCE",
             message:
-              "Solde de l'avance insuffisant.",
+              "Solde total des avances insuffisant.",
             solde:
-              Math.max(
-                remaining,
-                0
-              ),
+              allocationResult.totalDisponible,
             montantBon:
               prixTotalNumber,
             manque:
-              prixTotalNumber -
-              Math.max(
-                remaining,
-                0
-              ),
+              allocationResult.manque,
+          });
+      }
+
+      const allocations =
+        allocationResult.allocations;
+
+      const avance =
+        allocations[0]?.avance;
+
+      if (!avance) {
+        return res
+          .status(400)
+          .json({
+            code:
+              "NO_ACTIVE_ADVANCE",
+            message:
+              "Aucune avance disponible pour ce centre. Ajoutez d'abord un nouveau chèque d'avance.",
           });
       }
 
@@ -801,8 +965,8 @@ router.post(
             ).trim(),
           imageBon:
             uploadedImageUrl,
-          avance:
-            avance._id,
+          avance,
+          allocations,
           createdBy:
             actor.userId,
           createdByName:
@@ -815,18 +979,9 @@ router.post(
 
       await gasoil.save();
 
-      const balanceAfter =
-        remaining -
-        prixTotalNumber;
-
-      if (
-        balanceAfter <= 0.005
-      ) {
-        avance.statut =
-          "CLOTUREE";
-
-        await avance.save();
-      }
+      await syncCentreAdvanceStatuses(
+        centre._id
+      );
 
       const populated =
         await Gasoil.findById(
@@ -834,6 +989,10 @@ router.post(
         )
           .populate(
             "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "allocations.avance",
             "numeroCheque montant station statut centre"
           )
           .populate(
@@ -1002,31 +1161,16 @@ router.put(
           });
       }
 
-      const avance =
-        await Avance.findById(
-          gasoil.avance
-        );
-
-      if (!avance) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "L'avance associée à ce bon est introuvable.",
-          });
-      }
-
-      const {
-        remaining,
-      } =
-        await getRemainingBalance(
-          avance,
+      const allocationResult =
+        await buildFifoAllocations(
+          gasoil.centre,
+          prixTotalNumber,
           gasoil._id
         );
 
       if (
-        prixTotalNumber >
-        remaining
+        allocationResult.manque >
+        0.005
       ) {
         return res
           .status(409)
@@ -1034,20 +1178,30 @@ router.put(
             code:
               "INSUFFICIENT_ADVANCE",
             message:
-              "Le nouveau prix dépasse le montant disponible sur l'avance de ce bon.",
+              "Le nouveau prix dépasse le solde total disponible des avances.",
             solde:
-              Math.max(
-                remaining,
-                0
-              ),
+              allocationResult.totalDisponible,
             montantBon:
               prixTotalNumber,
             manque:
-              prixTotalNumber -
-              Math.max(
-                remaining,
-                0
-              ),
+              allocationResult.manque,
+          });
+      }
+
+      const allocations =
+        allocationResult.allocations;
+
+      const primaryAvance =
+        allocations[0]?.avance;
+
+      if (!primaryAvance) {
+        return res
+          .status(400)
+          .json({
+            code:
+              "NO_ACTIVE_ADVANCE",
+            message:
+              "Aucune avance disponible pour ce centre.",
           });
       }
 
@@ -1102,6 +1256,12 @@ router.put(
           )
         );
 
+      gasoil.avance =
+        primaryAvance;
+
+      gasoil.allocations =
+        allocations;
+
       gasoil.observation =
         String(
           observation || ""
@@ -1135,21 +1295,9 @@ router.put(
 
       await gasoil.save();
 
-      const balanceAfterUpdate =
-        remaining -
-        prixTotalNumber;
-
-      if (
-        balanceAfterUpdate <= 0.005
-      ) {
-        if (avance.statut !== "CLOTUREE") {
-          avance.statut = "CLOTUREE";
-          await avance.save();
-        }
-      } else if (avance.statut !== "ACTIVE") {
-        avance.statut = "ACTIVE";
-        await avance.save();
-      }
+      await syncCentreAdvanceStatuses(
+        gasoil.centre
+      );
 
       if (
         newImageUrl &&
@@ -1166,6 +1314,10 @@ router.put(
         )
           .populate(
             "avance",
+            "numeroCheque montant station statut centre"
+          )
+          .populate(
+            "allocations.avance",
             "numeroCheque montant station statut centre"
           )
           .populate(
@@ -1273,11 +1425,6 @@ router.delete(
           });
       }
 
-      const avance =
-        await Avance.findById(
-          gasoil.avance
-        );
-
       const imageToDelete =
         gasoil.imageBon || "";
 
@@ -1289,25 +1436,9 @@ router.delete(
         );
       }
 
-      if (
-        avance &&
-        avance.statut ===
-          "CLOTUREE"
-      ) {
-        const balance =
-          await getRemainingBalance(
-            avance
-          );
-
-        if (
-          balance.remaining > 0.005
-        ) {
-          avance.statut =
-            "ACTIVE";
-
-          await avance.save();
-        }
-      }
+      await syncCentreAdvanceStatuses(
+        gasoil.centre
+      );
 
       res.json({
         message:

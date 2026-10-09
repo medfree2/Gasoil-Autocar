@@ -286,51 +286,119 @@ const getRequestedCentreId = (
 const getAvanceDetails = async (
   avance
 ) => {
-  const result =
-    await Gasoil.aggregate([
-      {
-        $match: {
+  const avanceId = String(
+    avance._id
+  );
+
+  const centreId =
+    avance.centre?._id ||
+    avance.centre;
+
+  const bons =
+    await Gasoil.find({
+      centre: centreId,
+      $or: [
+        {
+          "allocations.avance":
+            avance._id,
+        },
+        {
           avance:
             avance._id,
-          centre:
-            avance.centre?._id ||
-            avance.centre,
         },
-      },
-      {
-        $group: {
-          _id: null,
-          consomme: {
-            $sum:
-              "$prixTotal",
-          },
-          litres: {
-            $sum:
-              "$quantite",
-          },
-          nombreBons: {
-            $sum: 1,
-          },
-        },
-      },
-    ]);
+      ],
+    })
+      .select(
+        "avance allocations prixTotal quantite"
+      )
+      .lean();
 
-  const stats =
-    result[0] || {
-      consomme: 0,
-      litres: 0,
-      nombreBons: 0,
-    };
+  let consomme = 0;
+  let litres = 0;
+  let nombreBons = 0;
 
-  const consomme =
+  for (const bon of bons) {
+    const allocations =
+      Array.isArray(
+        bon.allocations
+      )
+        ? bon.allocations
+        : [];
+
+    const matching =
+      allocations.find(
+        (item) =>
+          String(
+            item.avance
+          ) === avanceId
+      );
+
+    let montantUtilise = 0;
+
+    if (matching) {
+      montantUtilise =
+        Number(
+          matching.montant ||
+            0
+        );
+    } else if (
+      allocations.length === 0 &&
+      String(
+        bon.avance || ""
+      ) === avanceId
+    ) {
+      // Legacy bon created before multi-cheque allocation.
+      montantUtilise =
+        Number(
+          bon.prixTotal || 0
+        );
+    }
+
+    if (montantUtilise <= 0) {
+      continue;
+    }
+
+    consomme +=
+      montantUtilise;
+
+    nombreBons += 1;
+
+    const prixBon =
+      Number(
+        bon.prixTotal || 0
+      );
+
+    const quantiteBon =
+      Number(
+        bon.quantite || 0
+      );
+
+    if (prixBon > 0) {
+      litres +=
+        quantiteBon *
+        (montantUtilise /
+          prixBon);
+    }
+  }
+
+  consomme =
     Number(
-      stats.consomme || 0
+      consomme.toFixed(2)
+    );
+
+  litres =
+    Number(
+      litres.toFixed(2)
     );
 
   const solde = Math.max(
     Number(
-      avance.montant
-    ) - consomme,
+      (
+        Number(
+          avance.montant
+        ) - consomme
+      ).toFixed(2)
+    ),
     0
   );
 
@@ -353,16 +421,8 @@ const getAvanceDetails = async (
     consomme,
     solde,
     pourcentage,
-    litres:
-      Number(
-        stats.litres ||
-          0
-      ),
-    nombreBons:
-      Number(
-        stats.nombreBons ||
-          0
-      ),
+    litres,
+    nombreBons,
   };
 };
 

@@ -55,10 +55,31 @@ const gasoilSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Primary/first advance kept for backward compatibility and existing UI.
     avance: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Avance",
       required: true,
+    },
+
+    // A bon can consume several cheques. Example:
+    // 715.08 DH from the oldest cheque + 954.92 DH from the next cheque.
+    allocations: {
+      type: [
+        {
+          avance: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Avance",
+            required: true,
+          },
+          montant: {
+            type: Number,
+            required: true,
+            min: 0,
+          },
+        },
+      ],
+      default: [],
     },
 
     createdBy: {
