@@ -3542,6 +3542,7 @@ function App() {
                   </tfoot>
                 </table>
               </div>
+              </>
             )}
           </section>
         )}
