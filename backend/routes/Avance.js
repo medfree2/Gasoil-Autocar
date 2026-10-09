@@ -175,10 +175,10 @@ const getCloudinaryPublicId = (
       publicParts.pop();
 
     const withoutExtension =
-      lastPart.replace(
-        /\.[^/.]+$/,
-        ""
-      );
+  lastPart.replace(
+    /\.[^/.]+$/,
+    ""
+  );
 
     return [
       ...publicParts,
@@ -366,6 +366,37 @@ const getAvanceDetails = async (
   };
 };
 
+const syncAvanceStatus = async (
+  avance
+) => {
+  const details =
+    await getAvanceDetails(
+      avance
+    );
+
+  const expectedStatus =
+    Number(details.solde) >
+    0.005
+      ? "ACTIVE"
+      : "CLOTUREE";
+
+  if (
+    avance.statut !==
+    expectedStatus
+  ) {
+    avance.statut =
+      expectedStatus;
+
+    await avance.save();
+  }
+
+  return {
+    ...details,
+    statut:
+      expectedStatus,
+  };
+};
+
 // ==========================================================
 // GET ALL
 // ==========================================================
@@ -420,7 +451,7 @@ router.get(
         const avance of avances
       ) {
         result.push(
-          await getAvanceDetails(
+          await syncAvanceStatus(
             avance
           )
         );
@@ -474,11 +505,9 @@ router.get(
         return res.json(null);
       }
 
-      const avance =
-        await Avance.findOne({
+      const avances =
+        await Avance.find({
           centre: centreId,
-          statut:
-            "ACTIVE",
         })
           .populate(
             "centre",
@@ -489,14 +518,28 @@ router.get(
             createdAt: 1,
           });
 
-      if (!avance) {
-        return res.json(null);
+      let activeDetails = null;
+
+      for (
+        const avance of avances
+      ) {
+        const details =
+          await syncAvanceStatus(
+            avance
+          );
+
+        if (
+          !activeDetails &&
+          details.statut ===
+            "ACTIVE"
+        ) {
+          activeDetails =
+            details;
+        }
       }
 
       res.json(
-        await getAvanceDetails(
-          avance
-        )
+        activeDetails
       );
     } catch (error) {
       console.error(error);
