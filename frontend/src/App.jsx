@@ -2704,14 +2704,14 @@ function App() {
   return (
     <div className="min-h-screen bg-[#f3f6fb] text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1760px] items-center justify-between gap-3 px-4 py-4 xl:px-6">
+        <div className="mx-auto flex max-w-[1760px] items-center justify-between gap-2 px-3 py-3 sm:px-4 sm:py-4 xl:px-6">
           <div className="flex min-w-0 shrink-0 items-center gap-3 xl:gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200 sm:h-12 sm:w-12 sm:rounded-2xl">
               <BusFront size={25} />
             </div>
 
             <div className="min-w-0">
-              <h1 className="whitespace-nowrap text-xl font-black tracking-tight xl:text-2xl">
+              <h1 className="whitespace-nowrap text-base font-black tracking-tight sm:text-xl xl:text-2xl">
                 Suivi Gasoil Autocar
               </h1>
               <p className="hidden whitespace-nowrap text-xs text-slate-500 2xl:block 2xl:text-sm">
@@ -2844,16 +2844,24 @@ function App() {
             <button
               onClick={openPasswordForm}
               title="Changer mon mot de passe"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 2xl:hidden"
+              className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 sm:flex 2xl:hidden"
             >
               <KeyRound size={18} />
+            </button>
+
+            <button
+              onClick={handleLogout}
+              title="Déconnexion"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:h-11 sm:w-11 2xl:hidden"
+            >
+              <LogOut size={18} />
             </button>
 
             {page === "avances" ? (
               canManageUsers ? (
                 <button
                   onClick={openAdvanceForm}
-                  className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5"
+                  className="hidden shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 font-bold text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5 sm:flex"
                 >
                   <Plus size={18} />
                   Nouvelle avance
@@ -2862,7 +2870,7 @@ function App() {
             ) : page === "users" && canManageUsers ? (
               <button
                 onClick={openUserForm}
-                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5"
+                className="hidden shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5 sm:flex"
               >
                 <UserPlus size={18} />
                 Nouveau compte
@@ -2870,25 +2878,64 @@ function App() {
             ) : page === "centres" && isSuperAdmin ? (
               <button
                 onClick={() => openCentreForm()}
-                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-blue-900 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5"
+                className="hidden shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-blue-900 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5 sm:flex"
               >
                 <Plus size={18} />
                 Nouveau centre
               </button>
-            ) : page === "suivi" ? (
-              <button
-                onClick={openForm}
-                className="flex shrink-0 items-center whitespace-nowrap gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5"
-              >
-                <Plus size={18} />
-                Nouveau bon
-              </button>
             ) : null}
+          </div>
+        </div>
+        <div className="border-t border-slate-100 px-3 pb-3 lg:hidden">
+          <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <NavButton active={page === "suivi"} onClick={() => setPage("suivi")} icon={<LayoutList size={16} />} label="Suivi" />
+            <NavButton active={page === "resume"} onClick={() => setPage("resume")} icon={<BarChart3 size={16} />} label="Résumé" />
+            <NavButton active={page === "avances"} onClick={() => setPage("avances")} icon={<CreditCard size={16} />} label="Avances" />
+            {canManageUsers && (
+              <NavButton active={page === "users"} onClick={() => setPage("users")} icon={<UsersRound size={16} />} label="Utilisateurs" />
+            )}
+            {isSuperAdmin && (
+              <NavButton active={page === "centres"} onClick={() => setPage("centres")} icon={<Landmark size={16} />} label="Centres" />
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center gap-2 md:hidden">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+              <Landmark size={16} className="shrink-0 text-blue-600" />
+              {isSuperAdmin ? (
+                <select
+                  value={selectedCentreId}
+                  onChange={(event) => {
+                    setRecords([]);
+                    setAvances([]);
+                    setActiveAdvance(null);
+                    setSelectedCentreId(event.target.value);
+                    setPage("suivi");
+                  }}
+                  disabled={loadingCentres}
+                  className="min-w-0 flex-1 bg-transparent text-sm font-black text-blue-950 outline-none"
+                >
+                  {centres.filter((centre) => centre.active !== false).map((centre) => (
+                    <option key={centre.id} value={centre.id}>{centre.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="truncate text-sm font-black text-blue-950">{activeCentre?.name || "Centre"}</span>
+              )}
+            </div>
+
+            <button
+              onClick={openPasswordForm}
+              title="Changer mon mot de passe"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500"
+            >
+              <KeyRound size={17} />
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-6 py-7">
+      <main className="mx-auto max-w-[1500px] px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-7">
         {message && (
           <div className="mb-5 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
             <span>{message}</span>
@@ -2901,13 +2948,13 @@ function App() {
 
         {(page === "suivi" || page === "resume") && (
           <>
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-400">
                   {page === "suivi" ? "Suivi quotidien" : "Résumé quotidien"}
                 </p>
 
-                <h2 className="mt-1 text-3xl font-black capitalize">
+                <h2 className="mt-1 text-2xl font-black capitalize sm:text-3xl">
                   {selectedDateLabel}
                 </h2>
 
@@ -2917,10 +2964,20 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+                {page === "suivi" && (
+                  <button
+                    onClick={openForm}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 sm:px-4 sm:text-base"
+                  >
+                    <Plus size={19} />
+                    Nouveau bon
+                  </button>
+                )}
+
                 <button
                   onClick={exportDailyExcel}
-                  className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 sm:px-4 sm:text-base"
                 >
                   <FileSpreadsheet size={19} />
                   Export Excel
@@ -2937,7 +2994,7 @@ function App() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold shadow-sm outline-none"
+                  className="col-span-2 min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold shadow-sm outline-none sm:col-span-1 sm:px-4 sm:text-base"
                 />
 
                 <button
@@ -5575,7 +5632,7 @@ function AdvanceSummaryCard({ icon, label, value, tone }) {
   };
 
   return (
-    <div className="rounded-3xl border border-white bg-white p-5 shadow-lg shadow-slate-200/50">
+    <div className="rounded-2xl border border-white bg-white p-4 shadow-lg shadow-slate-200/50 sm:rounded-3xl sm:p-5">
       <div
         className={`flex h-11 w-11 items-center justify-center rounded-xl ${
           tones[tone] || tones.blue
@@ -5585,7 +5642,7 @@ function AdvanceSummaryCard({ icon, label, value, tone }) {
       </div>
 
       <p className="mt-5 text-sm font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
+      <p className="mt-2 text-xl font-black tracking-tight sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -5603,16 +5660,16 @@ function ModalShell({ eyebrow, title, onClose, children, green = false, wide = f
   return (
     <div
       onMouseDown={onClose}
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-2 backdrop-blur-sm sm:p-4"
     >
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className={`mx-auto my-6 w-full overflow-hidden rounded-3xl bg-white shadow-2xl md:my-10 ${
+        className={`mx-auto my-2 w-full overflow-hidden rounded-2xl bg-white shadow-2xl sm:my-6 sm:rounded-3xl md:my-10 ${
           wide ? "max-w-[1500px]" : "max-w-3xl"
         }`}
       >
         <div
-          className={`flex items-start justify-between px-7 py-6 text-white ${
+          className={`flex items-start justify-between gap-3 px-4 py-4 text-white sm:px-7 sm:py-6 ${
             green
               ? "bg-gradient-to-r from-emerald-950 to-teal-900"
               : "bg-gradient-to-r from-slate-950 to-blue-950"
@@ -5626,7 +5683,7 @@ function ModalShell({ eyebrow, title, onClose, children, green = false, wide = f
             >
               {eyebrow}
             </p>
-            <h2 className="mt-1 text-2xl font-black">{title}</h2>
+            <h2 className="mt-1 text-xl font-black sm:text-2xl">{title}</h2>
           </div>
 
           <button
