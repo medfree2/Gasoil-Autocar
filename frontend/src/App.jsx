@@ -2725,7 +2725,7 @@ function App() {
           },
           views: [
             {
-              zoomScale: 60,
+              zoomScale: 100,
             },
           ],
         }
@@ -2854,8 +2854,59 @@ function App() {
       vertical: "middle",
     };
 
-    // The original canevas leaves C3:E3 blank.
-    // We keep that exact layout.
+    // Show the real unit price from the selected day's bons.
+    const v2UnitPrices = [
+      ...new Set(
+        dayRecords
+          .map((item) => {
+            const quantity = Number(item.quantite || 0);
+            const total = Number(item.prixTotal || 0);
+
+            if (
+              !Number.isFinite(quantity) ||
+              quantity <= 0 ||
+              !Number.isFinite(total) ||
+              total <= 0
+            ) {
+              return null;
+            }
+
+            return Number((total / quantity).toFixed(2));
+          })
+          .filter((value) => value !== null)
+          .map((value) => value.toFixed(2))
+      ),
+    ];
+
+    worksheet.mergeCells("C3:E3");
+
+    const priceValue =
+      worksheet.getCell("C3");
+
+    priceValue.value =
+      v2UnitPrices.length === 1
+        ? Number(v2UnitPrices[0])
+        : v2UnitPrices.length > 1
+          ? v2UnitPrices.join(" / ")
+          : "";
+
+    priceValue.font = {
+      name: FONT_NAME,
+      size: 11,
+      bold: true,
+      color: {
+        argb: BLACK,
+      },
+    };
+
+    priceValue.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    if (v2UnitPrices.length === 1) {
+      priceValue.numFmt = '0.00 "DH/L"';
+    }
 
     // ---------------------------------------------------------
     // TABLE HEADER - ROW 5 EXACTLY
@@ -3141,14 +3192,22 @@ function App() {
     worksheet.pageSetup = {
       paperSize: 9,
       orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
       margins: {
-        left: 0.7,
-        right: 0.7,
-        top: 0.75,
-        bottom: 0.75,
-        header: 0.3,
-        footer: 0.3,
+        left: 0.25,
+        right: 0.25,
+        top: 0.5,
+        bottom: 0.5,
+        header: 0.2,
+        footer: 0.2,
       },
+    };
+
+    worksheet.properties.pageSetUpPr = {
+      fitToPage: true,
     };
 
     worksheet.printArea =
