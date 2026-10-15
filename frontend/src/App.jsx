@@ -2685,6 +2685,427 @@ function App() {
   };
 
   // =========================================================
+  // EXPORT EXCEL V2 - CANEVAS STATION EXTERNE
+  // =========================================================
+
+  const exportDailyExcelV2 = async () => {
+    if (dayRecords.length === 0) {
+      alert("Aucun bon à exporter pour cette journée.");
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Suivi Gasoil Autocar";
+    workbook.company = "Suivi Gasoil Autocar";
+    workbook.subject = "Etat des prises Gasoil à la station externe";
+    workbook.created = new Date();
+
+    const fileDate =
+      selectedDate
+        .split("-")
+        .reverse()
+        .join("-");
+
+    const displayDate =
+      selectedDate
+        .split("-")
+        .reverse()
+        .join("/");
+
+    const stationName =
+      activeAdvance?.station?.trim() ||
+      "STATION EXTERNE";
+
+    const unitPrices = dayRecords
+      .map((item) => {
+        const quantity =
+          Number(item.quantite || 0);
+
+        const total =
+          Number(item.prixTotal || 0);
+
+        if (
+          !Number.isFinite(quantity) ||
+          quantity <= 0 ||
+          !Number.isFinite(total) ||
+          total <= 0
+        ) {
+          return null;
+        }
+
+        return Number(
+          (total / quantity).toFixed(2)
+        );
+      })
+      .filter(
+        (value) =>
+          value !== null
+      );
+
+    const uniqueUnitPrices =
+      [
+        ...new Set(
+          unitPrices.map(
+            (value) =>
+              value.toFixed(2)
+          )
+        ),
+      ];
+
+    const displayedUnitPrice =
+      uniqueUnitPrices.length === 1
+        ? Number(
+            uniqueUnitPrices[0]
+          )
+        : null;
+
+    const worksheet =
+      workbook.addWorksheet(
+        fileDate,
+        {
+          properties: {
+            defaultRowHeight: 20,
+          },
+        }
+      );
+
+    // Same 5-column structure as the supplied Excel canevas.
+    worksheet.columns = [
+      { width: 17 },
+      { width: 29 },
+      { width: 23 },
+      { width: 16 },
+      { width: 16 },
+    ];
+
+    worksheet.mergeCells(
+      "A1:E1"
+    );
+
+    const titleCell =
+      worksheet.getCell("A1");
+
+    titleCell.value =
+      `Etat des prises Gasoil à la Station ${stationName}\nDate : ${displayDate}`;
+
+    titleCell.font = {
+      name: "Calibri",
+      size: 14,
+      bold: true,
+    };
+
+    titleCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+    };
+
+    titleCell.border = {
+      top: {
+        style: "thin",
+        color: {
+          argb: "FF000000",
+        },
+      },
+      left: {
+        style: "thin",
+        color: {
+          argb: "FF000000",
+        },
+      },
+      bottom: {
+        style: "thin",
+        color: {
+          argb: "FF000000",
+        },
+      },
+      right: {
+        style: "thin",
+        color: {
+          argb: "FF000000",
+        },
+      },
+    };
+
+    worksheet.getRow(1).height =
+      42;
+
+    worksheet.mergeCells(
+      "A3:B3"
+    );
+
+    const priceLabelCell =
+      worksheet.getCell("A3");
+
+    priceLabelCell.value =
+      uniqueUnitPrices.length <= 1
+        ? "Prix unitaire affiché à la station :"
+        : "Prix unitaires affichés à la station :";
+
+    priceLabelCell.font = {
+      name: "Calibri",
+      size: 13,
+      bold: true,
+    };
+
+    priceLabelCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    const priceValueCell =
+      worksheet.getCell("C3");
+
+    priceValueCell.value =
+      displayedUnitPrice !== null
+        ? displayedUnitPrice
+        : uniqueUnitPrices.join(
+            " / "
+          );
+
+    priceValueCell.font = {
+      name: "Calibri",
+      size: 12,
+    };
+
+    priceValueCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    if (
+      displayedUnitPrice !== null
+    ) {
+      priceValueCell.numFmt =
+        "0.00";
+    }
+
+    worksheet.getRow(3).height =
+      24;
+
+    const headerRow =
+      worksheet.getRow(5);
+
+    headerRow.values = [
+      "Date",
+      "N° de bon de sortie",
+      "N°  véhicule",
+      "Quantité",
+      "Prix total",
+    ];
+
+    headerRow.height = 24;
+
+    const applyBlackBorder =
+      (cell) => {
+        cell.border = {
+          top: {
+            style: "thin",
+            color: {
+              argb: "FF000000",
+            },
+          },
+          left: {
+            style: "thin",
+            color: {
+              argb: "FF000000",
+            },
+          },
+          bottom: {
+            style: "thin",
+            color: {
+              argb: "FF000000",
+            },
+          },
+          right: {
+            style: "thin",
+            color: {
+              argb: "FF000000",
+            },
+          },
+        };
+      };
+
+    headerRow.eachCell(
+      (cell) => {
+        cell.font = {
+          name: "Calibri",
+          size: 12,
+          bold: false,
+        };
+
+        cell.alignment = {
+          horizontal: "center",
+          vertical: "middle",
+          wrapText: true,
+        };
+
+        applyBlackBorder(
+          cell
+        );
+      }
+    );
+
+    const sortedRecords =
+      [...dayRecords].sort(
+        (a, b) =>
+          String(
+            a.numeroBon || ""
+          ).localeCompare(
+            String(
+              b.numeroBon || ""
+            ),
+            "fr",
+            {
+              numeric: true,
+            }
+          )
+      );
+
+    sortedRecords.forEach(
+      (item, index) => {
+        const rowNumber =
+          6 + index;
+
+        const row =
+          worksheet.getRow(
+            rowNumber
+          );
+
+        const itemDate =
+          new Date(
+            `${selectedDate}T12:00:00`
+          );
+
+        row.values = [
+          itemDate,
+          item.numeroBon || "",
+          item.autocar || "",
+          Number(
+            item.quantite || 0
+          ),
+          Number(
+            item.prixTotal || 0
+          ),
+        ];
+
+        row.height = 23;
+
+        row.getCell(1).numFmt =
+          "d/m/yy";
+
+        row.getCell(4).numFmt =
+          "0.00";
+
+        row.getCell(5).numFmt =
+          "#,##0.00";
+
+        row.eachCell(
+          (cell) => {
+            cell.font = {
+              name: "Calibri",
+              size: 12,
+            };
+
+            cell.alignment = {
+              horizontal:
+                "right",
+              vertical:
+                "middle",
+            };
+
+            applyBlackBorder(
+              cell
+            );
+          }
+        );
+      }
+    );
+
+    // Keep blank bordered lines below the data, like the original canevas.
+    const firstBlankRow =
+      6 +
+      sortedRecords.length;
+
+    const lastTemplateRow =
+      Math.max(
+        20,
+        firstBlankRow + 3
+      );
+
+    for (
+      let rowNumber =
+        firstBlankRow;
+      rowNumber <=
+      lastTemplateRow;
+      rowNumber += 1
+    ) {
+      const row =
+        worksheet.getRow(
+          rowNumber
+        );
+
+      row.height = 23;
+
+      for (
+        let column = 1;
+        column <= 5;
+        column += 1
+      ) {
+        const cell =
+          row.getCell(
+            column
+          );
+
+        applyBlackBorder(
+          cell
+        );
+
+        if (column === 5) {
+          cell.numFmt =
+            "#,##0.00";
+        }
+      }
+    }
+
+    worksheet.pageSetup = {
+      orientation: "portrait",
+      paperSize: 9,
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      horizontalCentered: true,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.15,
+        footer: 0.15,
+      },
+    };
+
+    worksheet.properties.pageSetUpPr =
+      {
+        fitToPage: true,
+      };
+
+    const buffer =
+      await workbook.xlsx.writeBuffer();
+
+    saveAs(
+      new Blob(
+        [buffer],
+        {
+          type:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+      ),
+      `Suivi_Gasoil_V2_${fileDate}.xlsx`
+    );
+  };
+
+  // =========================================================
   // UI
   // =========================================================
 
@@ -2981,6 +3402,14 @@ function App() {
                 >
                   <FileSpreadsheet size={19} />
                   Export Excel
+                </button>
+
+                <button
+                  onClick={exportDailyExcelV2}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-3 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-900 sm:px-4 sm:text-base"
+                >
+                  <FileSpreadsheet size={19} />
+                  Export Excel V2
                 </button>
 
                 <button
