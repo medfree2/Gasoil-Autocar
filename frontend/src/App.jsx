@@ -3129,20 +3129,42 @@ function App() {
         `D${totalRowNumber}`
       );
 
-    totalQuantityCell.value = {
-      formula:
-        `SUM(D${firstDataRow}:D${actualLastDataRow})`,
-    };
+    // Write calculated totals directly so they are visible immediately
+    // in Excel, even before Excel recalculates workbook formulas.
+    const v2TotalQuantity =
+      sortedRecords.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.quantite || 0
+          ),
+        0
+      );
+
+    const v2TotalPrice =
+      sortedRecords.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.prixTotal || 0
+          ),
+        0
+      );
+
+    totalQuantityCell.value =
+      Number(
+        v2TotalQuantity.toFixed(2)
+      );
 
     const totalPriceCell =
       worksheet.getCell(
         `E${totalRowNumber}`
       );
 
-    totalPriceCell.value = {
-      formula:
-        `SUM(E${firstDataRow}:E${actualLastDataRow})`,
-    };
+    totalPriceCell.value =
+      Number(
+        v2TotalPrice.toFixed(2)
+      );
 
     for (
       let column = 1;
