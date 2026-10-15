@@ -1185,6 +1185,40 @@ function App() {
     [dayRecords]
   );
 
+  // CUMUL GLOBAL - TOUS LES JOURS DU CENTRE
+  const globalBons = records.length;
+
+  const globalLitres = useMemo(
+    () => records.reduce(
+      (sum, item) => sum + Number(item.quantite || 0),
+      0
+    ),
+    [records]
+  );
+
+  const globalPrix = useMemo(
+    () => records.reduce(
+      (sum, item) => sum + Number(item.prixTotal || 0),
+      0
+    ),
+    [records]
+  );
+
+  const globalFirstDate = useMemo(() => {
+    const dates = records
+      .map((item) => new Date(item.date))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .sort((a, b) => a - b);
+
+    return dates.length
+      ? dates[0].toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "—";
+  }, [records]);
+
 
   // =========================================================
   // DAILY RANKINGS
@@ -4118,6 +4152,58 @@ function App() {
               </div>
               </>
             )}
+          </section>
+        )}
+
+        {page === "resume" && (
+          <section className="mb-6 overflow-hidden rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-950 via-indigo-950 to-slate-950 p-5 text-white shadow-xl shadow-blue-200/40 sm:p-7">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-300 sm:text-sm">
+                  Cumul depuis le début
+                </p>
+                <h3 className="mt-2 text-2xl font-black sm:text-3xl">
+                  Total général · {activeCentre?.name || "Centre"}
+                </h3>
+                <p className="mt-2 text-sm font-semibold text-blue-200">
+                  Du {globalFirstDate} à aujourd'hui · Tous les bons enregistrés
+                </p>
+              </div>
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-wide text-blue-100">
+                <History size={15} />
+                Tous les jours
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-blue-200">
+                  <FileSpreadsheet size={18} />
+                  Total bons
+                </div>
+                <div className="mt-2 text-3xl font-black">{globalBons}</div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-200">
+                  <Fuel size={18} />
+                  Quantité cumulée
+                </div>
+                <div className="mt-2 text-3xl font-black">
+                  {formatNumber(globalLitres)} <span className="text-lg text-emerald-200">L</span>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-violet-200">
+                  <Wallet size={18} />
+                  Montant cumulé
+                </div>
+                <div className="mt-2 text-3xl font-black">
+                  {formatMoney(globalPrix)} <span className="text-lg text-violet-200">DH</span>
+                </div>
+              </div>
+            </div>
           </section>
         )}
 
