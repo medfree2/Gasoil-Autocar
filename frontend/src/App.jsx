@@ -2685,7 +2685,7 @@ function App() {
   };
 
   // =========================================================
-  // EXPORT EXCEL V2 - CANEVAS STATION EXTERNE
+  // EXPORT EXCEL V2 - COPIE DU CANEVAS STATION EXTERNE
   // =========================================================
 
   const exportDailyExcelV2 = async () => {
@@ -2697,7 +2697,7 @@ function App() {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Suivi Gasoil Autocar";
     workbook.company = "Suivi Gasoil Autocar";
-    workbook.subject = "Etat des prises Gasoil à la station externe";
+    workbook.subject = "Etat des prises Gasoil à la Station";
     workbook.created = new Date();
 
     const fileDate =
@@ -2714,69 +2714,79 @@ function App() {
 
     const stationName =
       activeAdvance?.station?.trim() ||
-      "STATION EXTERNE";
-
-    const unitPrices = dayRecords
-      .map((item) => {
-        const quantity =
-          Number(item.quantite || 0);
-
-        const total =
-          Number(item.prixTotal || 0);
-
-        if (
-          !Number.isFinite(quantity) ||
-          quantity <= 0 ||
-          !Number.isFinite(total) ||
-          total <= 0
-        ) {
-          return null;
-        }
-
-        return Number(
-          (total / quantity).toFixed(2)
-        );
-      })
-      .filter(
-        (value) =>
-          value !== null
-      );
-
-    const uniqueUnitPrices =
-      [
-        ...new Set(
-          unitPrices.map(
-            (value) =>
-              value.toFixed(2)
-          )
-        ),
-      ];
-
-    const displayedUnitPrice =
-      uniqueUnitPrices.length === 1
-        ? Number(
-            uniqueUnitPrices[0]
-          )
-        : null;
+      "xxxx";
 
     const worksheet =
       workbook.addWorksheet(
         fileDate,
         {
           properties: {
-            defaultRowHeight: 20,
+            defaultRowHeight: 14.45,
           },
+          views: [
+            {
+              zoomScale: 60,
+            },
+          ],
         }
       );
 
-    // Same 5-column structure as the supplied Excel canevas.
-    worksheet.columns = [
-      { width: 17 },
-      { width: 29 },
-      { width: 23 },
-      { width: 16 },
-      { width: 16 },
-    ];
+    // Exact dimensions of the supplied canevas.
+    worksheet.getColumn("A").width =
+      12.42578125;
+    worksheet.getColumn("B").width =
+      21.28515625;
+    worksheet.getColumn("C").width =
+      17.140625;
+    worksheet.getColumn("D").width =
+      11.42578125;
+    worksheet.getColumn("E").width =
+      11.42578125;
+
+    worksheet.getRow(1).height =
+      28.15;
+    worksheet.getRow(2).height =
+      13.15;
+
+    const FONT_NAME =
+      "Aptos Narrow";
+
+    const BLACK =
+      "FF000000";
+
+    const YELLOW =
+      "FFFFFF00";
+
+    const thinBorder = {
+      top: {
+        style: "thin",
+        color: {
+          argb: BLACK,
+        },
+      },
+      left: {
+        style: "thin",
+        color: {
+          argb: BLACK,
+        },
+      },
+      bottom: {
+        style: "thin",
+        color: {
+          argb: BLACK,
+        },
+      },
+      right: {
+        style: "thin",
+        color: {
+          argb: BLACK,
+        },
+      },
+    };
+
+    // ---------------------------------------------------------
+    // TITLE - EXACT CANEVAS POSITION / MERGE / STYLE
+    // ---------------------------------------------------------
 
     worksheet.mergeCells(
       "A1:E1"
@@ -2789,9 +2799,12 @@ function App() {
       `Etat des prises Gasoil à la Station ${stationName}\nDate : ${displayDate}`;
 
     titleCell.font = {
-      name: "Calibri",
-      size: 14,
+      name: FONT_NAME,
+      size: 11,
       bold: true,
+      color: {
+        argb: BLACK,
+      },
     };
 
     titleCell.alignment = {
@@ -2800,88 +2813,53 @@ function App() {
       wrapText: true,
     };
 
-    titleCell.border = {
-      top: {
-        style: "thin",
-        color: {
-          argb: "FF000000",
-        },
-      },
-      left: {
-        style: "thin",
-        color: {
-          argb: "FF000000",
-        },
-      },
-      bottom: {
-        style: "thin",
-        color: {
-          argb: "FF000000",
-        },
-      },
-      right: {
-        style: "thin",
-        color: {
-          argb: "FF000000",
-        },
-      },
-    };
+    titleCell.border =
+      thinBorder;
 
-    worksheet.getRow(1).height =
-      42;
+    // Keep the full merged title surrounded by the same border.
+    ["B1", "C1", "D1", "E1"].forEach(
+      (address) => {
+        worksheet.getCell(
+          address
+        ).border = thinBorder;
+      }
+    );
+
+    // ---------------------------------------------------------
+    // UNIT PRICE - SAME ROW / SAME MERGE / SAME STYLE
+    // ---------------------------------------------------------
 
     worksheet.mergeCells(
       "A3:B3"
     );
 
-    const priceLabelCell =
+    const priceLabel =
       worksheet.getCell("A3");
 
-    priceLabelCell.value =
-      uniqueUnitPrices.length <= 1
-        ? "Prix unitaire affiché à la station :"
-        : "Prix unitaires affichés à la station :";
+    priceLabel.value =
+      "Prix unitaire affiché à la station :";
 
-    priceLabelCell.font = {
-      name: "Calibri",
-      size: 13,
+    priceLabel.font = {
+      name: FONT_NAME,
+      size: 11,
       bold: true,
+      underline: true,
+      color: {
+        argb: BLACK,
+      },
     };
 
-    priceLabelCell.alignment = {
+    priceLabel.alignment = {
       horizontal: "center",
       vertical: "middle",
     };
 
-    const priceValueCell =
-      worksheet.getCell("C3");
+    // The original canevas leaves C3:E3 blank.
+    // We keep that exact layout.
 
-    priceValueCell.value =
-      displayedUnitPrice !== null
-        ? displayedUnitPrice
-        : uniqueUnitPrices.join(
-            " / "
-          );
-
-    priceValueCell.font = {
-      name: "Calibri",
-      size: 12,
-    };
-
-    priceValueCell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
-    };
-
-    if (
-      displayedUnitPrice !== null
-    ) {
-      priceValueCell.numFmt =
-        "0.00";
-    }
-
-    worksheet.getRow(3).height =
-      24;
+    // ---------------------------------------------------------
+    // TABLE HEADER - ROW 5 EXACTLY
+    // ---------------------------------------------------------
 
     const headerRow =
       worksheet.getRow(5);
@@ -2894,57 +2872,29 @@ function App() {
       "Prix total",
     ];
 
-    headerRow.height = 24;
-
-    const applyBlackBorder =
-      (cell) => {
-        cell.border = {
-          top: {
-            style: "thin",
-            color: {
-              argb: "FF000000",
-            },
-          },
-          left: {
-            style: "thin",
-            color: {
-              argb: "FF000000",
-            },
-          },
-          bottom: {
-            style: "thin",
-            color: {
-              argb: "FF000000",
-            },
-          },
-          right: {
-            style: "thin",
-            color: {
-              argb: "FF000000",
-            },
-          },
-        };
-      };
-
     headerRow.eachCell(
       (cell) => {
         cell.font = {
-          name: "Calibri",
-          size: 12,
-          bold: false,
+          name: FONT_NAME,
+          size: 11,
+          color: {
+            argb: BLACK,
+          },
         };
 
         cell.alignment = {
           horizontal: "center",
           vertical: "middle",
-          wrapText: true,
         };
 
-        applyBlackBorder(
-          cell
-        );
+        cell.border =
+          thinBorder;
       }
     );
+
+    // ---------------------------------------------------------
+    // DATA - ROWS 6 TO 39, AS IN THE ORIGINAL CANEVAS
+    // ---------------------------------------------------------
 
     const sortedRecords =
       [...dayRecords].sort(
@@ -2962,23 +2912,23 @@ function App() {
           )
       );
 
+    const firstDataRow = 6;
+
     sortedRecords.forEach(
       (item, index) => {
         const rowNumber =
-          6 + index;
+          firstDataRow +
+          index;
 
         const row =
           worksheet.getRow(
             rowNumber
           );
 
-        const itemDate =
+        row.values = [
           new Date(
             `${selectedDate}T12:00:00`
-          );
-
-        row.values = [
-          itemDate,
+          ),
           item.numeroBon || "",
           item.autocar || "",
           Number(
@@ -2989,63 +2939,72 @@ function App() {
           ),
         ];
 
-        row.height = 23;
-
         row.getCell(1).numFmt =
-          "d/m/yy";
+          "dd/mm/yyyy";
 
         row.getCell(4).numFmt =
-          "0.00";
+          '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
 
         row.getCell(5).numFmt =
-          "#,##0.00";
+          '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
 
-        row.eachCell(
-          (cell) => {
-            cell.font = {
-              name: "Calibri",
-              size: 12,
-            };
+        for (
+          let column = 1;
+          column <= 5;
+          column += 1
+        ) {
+          const cell =
+            row.getCell(
+              column
+            );
 
+          cell.font = {
+            name: FONT_NAME,
+            size: 11,
+            color: {
+              argb: BLACK,
+            },
+          };
+
+          cell.border =
+            thinBorder;
+
+          if (column === 3) {
             cell.alignment = {
               horizontal:
-                "right",
+                "center",
               vertical:
                 "middle",
             };
-
-            applyBlackBorder(
-              cell
-            );
           }
-        );
+        }
       }
     );
 
-    // Keep blank bordered lines below the data, like the original canevas.
-    const firstBlankRow =
-      6 +
-      sortedRecords.length;
+    // Original template contains bordered empty rows through row 39.
+    // If there are more than 34 bons, the total row moves down so no data is lost.
+    const templateLastDataRow =
+      39;
 
-    const lastTemplateRow =
+    const actualLastDataRow =
       Math.max(
-        20,
-        firstBlankRow + 3
+        templateLastDataRow,
+        firstDataRow +
+          sortedRecords.length -
+          1
       );
 
     for (
       let rowNumber =
-        firstBlankRow;
+        firstDataRow;
       rowNumber <=
-      lastTemplateRow;
+      actualLastDataRow;
       rowNumber += 1
     ) {
       const row =
         worksheet.getRow(
           rowNumber
         );
-
-      row.height = 23;
 
       for (
         let column = 1;
@@ -3057,38 +3016,143 @@ function App() {
             column
           );
 
-        applyBlackBorder(
-          cell
-        );
-
-        if (column === 5) {
-          cell.numFmt =
-            "#,##0.00";
+        if (!cell.font) {
+          cell.font = {
+            name: FONT_NAME,
+            size: 11,
+            color: {
+              argb: BLACK,
+            },
+          };
         }
+
+        cell.border =
+          thinBorder;
       }
+
+      row.getCell(1).numFmt =
+        "dd/mm/yyyy";
+
+      row.getCell(4).numFmt =
+        '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
+
+      row.getCell(5).numFmt =
+        '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
     }
 
-    worksheet.pageSetup = {
-      orientation: "portrait",
-      paperSize: 9,
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 1,
-      horizontalCentered: true,
-      margins: {
-        left: 0.25,
-        right: 0.25,
-        top: 0.35,
-        bottom: 0.35,
-        header: 0.15,
-        footer: 0.15,
+    // ---------------------------------------------------------
+    // TOTAL - SAME YELLOW ROW / MERGE / FORMULAS
+    // ---------------------------------------------------------
+
+    const totalRowNumber =
+      actualLastDataRow + 1;
+
+    worksheet.mergeCells(
+      `A${totalRowNumber}:C${totalRowNumber}`
+    );
+
+    const totalLabelCell =
+      worksheet.getCell(
+        `A${totalRowNumber}`
+      );
+
+    totalLabelCell.value =
+      "Total";
+
+    totalLabelCell.font = {
+      name: FONT_NAME,
+      size: 11,
+      bold: true,
+      color: {
+        argb: BLACK,
       },
     };
 
-    worksheet.properties.pageSetUpPr =
-      {
-        fitToPage: true,
+    totalLabelCell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    const totalQuantityCell =
+      worksheet.getCell(
+        `D${totalRowNumber}`
+      );
+
+    totalQuantityCell.value = {
+      formula:
+        `SUM(D${firstDataRow}:D${actualLastDataRow})`,
+    };
+
+    const totalPriceCell =
+      worksheet.getCell(
+        `E${totalRowNumber}`
+      );
+
+    totalPriceCell.value = {
+      formula:
+        `SUM(E${firstDataRow}:E${actualLastDataRow})`,
+    };
+
+    for (
+      let column = 1;
+      column <= 5;
+      column += 1
+    ) {
+      const cell =
+        worksheet
+          .getRow(
+            totalRowNumber
+          )
+          .getCell(
+            column
+          );
+
+      cell.font = {
+        name: FONT_NAME,
+        size: 11,
+        bold: true,
+        color: {
+          argb: BLACK,
+        },
       };
+
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: {
+          argb: YELLOW,
+        },
+      };
+
+      cell.border =
+        thinBorder;
+    }
+
+    totalQuantityCell.numFmt =
+      '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
+
+    totalPriceCell.numFmt =
+      '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"??_-;_-@_-';
+
+    // ---------------------------------------------------------
+    // PRINT SETTINGS - SAME AS THE CANEVAS
+    // ---------------------------------------------------------
+
+    worksheet.pageSetup = {
+      paperSize: 9,
+      orientation: "portrait",
+      margins: {
+        left: 0.7,
+        right: 0.7,
+        top: 0.75,
+        bottom: 0.75,
+        header: 0.3,
+        footer: 0.3,
+      },
+    };
+
+    worksheet.printArea =
+      `A1:E${totalRowNumber}`;
 
     const buffer =
       await workbook.xlsx.writeBuffer();
