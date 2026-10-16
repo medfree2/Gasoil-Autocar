@@ -1,833 +1,1824 @@
 const express = require("express");
+
 const multer = require("multer");
+
 const cloudinary = require("cloudinary").v2;
 
+
+
 const Avance = require("../models/Avance");
+
 const Gasoil = require("../models/Gasoil");
+
 const User = require("../models/User");
+
 const Centre = require("../models/Centre");
 
+
+
 cloudinary.config({
-  cloud_name:
-    process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:
-    process.env.CLOUDINARY_API_KEY,
-  api_secret:
-    process.env.CLOUDINARY_API_SECRET,
+
+  cloud_name:
+
+    process.env.CLOUDINARY_CLOUD_NAME,
+
+  api_key:
+
+    process.env.CLOUDINARY_API_KEY,
+
+  api_secret:
+
+    process.env.CLOUDINARY_API_SECRET,
+
 });
+
+
 
 const router = express.Router();
 
+
+
 const ensureCloudinaryConfig = () => {
-  if (
-    !process.env.CLOUDINARY_CLOUD_NAME ||
-    !process.env.CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
-    throw new Error(
-      "Configuration Cloudinary manquante."
-    );
-  }
+
+  if (
+
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+
+    !process.env.CLOUDINARY_API_KEY ||
+
+    !process.env.CLOUDINARY_API_SECRET
+
+  ) {
+
+    throw new Error(
+
+      "Configuration Cloudinary manquante."
+
+    );
+
+  }
+
 };
+
+
 
 const fileFilter = (
-  req,
-  file,
-  cb
-) => {
-  const allowedTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-  ];
 
-  if (
-    allowedTypes.includes(
-      file.mimetype
-    )
-  ) {
-    cb(null, true);
-  } else {
-    cb(
-      new Error(
-        "Seules les images JPG, PNG et WEBP sont autorisées."
-      )
-    );
-  }
+  req,
+
+  file,
+
+  cb
+
+) => {
+
+  const allowedTypes = [
+
+    "image/jpeg",
+
+    "image/jpg",
+
+    "image/png",
+
+    "image/webp",
+
+  ];
+
+
+
+  if (
+
+    allowedTypes.includes(
+
+      file.mimetype
+
+    )
+
+  ) {
+
+    cb(null, true);
+
+  } else {
+
+    cb(
+
+      new Error(
+
+        "Seules les images JPG, PNG et WEBP sont autorisées."
+
+      )
+
+    );
+
+  }
+
 };
+
+
 
 const upload = multer({
-  storage:
-    multer.memoryStorage(),
-  fileFilter,
-  limits: {
-    fileSize:
-      10 * 1024 * 1024,
-  },
+
+  storage:
+
+    multer.memoryStorage(),
+
+  fileFilter,
+
+  limits: {
+
+    fileSize:
+
+      10 * 1024 * 1024,
+
+  },
+
 });
 
+
+
 const uploadImageToCloudinary = (
-  file,
-  folder
+
+  file,
+
+  folder
+
 ) =>
-  new Promise(
-    (resolve, reject) => {
-      ensureCloudinaryConfig();
 
-      const stream =
-        cloudinary.uploader.upload_stream(
-          {
-            folder,
-            resource_type:
-              "image",
-            use_filename:
-              false,
-            unique_filename:
-              true,
-            overwrite:
-              false,
-            transformation: [
-              {
-                width: 1800,
-                height: 1800,
-                crop: "limit",
-                quality:
-                  "auto:good",
-              },
-            ],
-          },
-          (
-            error,
-            result
-          ) => {
-            if (error) {
-              reject(error);
-              return;
-            }
+  new Promise(
 
-            resolve(result);
-          }
-        );
+    (resolve, reject) => {
 
-      stream.end(
-        file.buffer
-      );
-    }
-  );
+      ensureCloudinaryConfig();
+
+
+
+      const stream =
+
+        cloudinary.uploader.upload_stream(
+
+          {
+
+            folder,
+
+            resource_type:
+
+              "image",
+
+            use_filename:
+
+              false,
+
+            unique_filename:
+
+              true,
+
+            overwrite:
+
+              false,
+
+            transformation: [
+
+              {
+
+                width: 1800,
+
+                height: 1800,
+
+                crop: "limit",
+
+                quality:
+
+                  "auto:good",
+
+              },
+
+            ],
+
+          },
+
+          (
+
+            error,
+
+            result
+
+          ) => {
+
+            if (error) {
+
+              reject(error);
+
+              return;
+
+            }
+
+
+
+            resolve(result);
+
+          }
+
+        );
+
+
+
+      stream.end(
+
+        file.buffer
+
+      );
+
+    }
+
+  );
+
+
 
 const getCloudinaryPublicId = (
-  imageUrl
+
+  imageUrl
+
 ) => {
-  if (!imageUrl) {
-    return null;
-  }
 
-  try {
-    const parsed =
-      new URL(imageUrl);
+  if (!imageUrl) {
 
-    if (
-      !parsed.hostname.endsWith(
-        "res.cloudinary.com"
-      )
-    ) {
-      return null;
-    }
+    return null;
 
-    const parts =
-      parsed.pathname
-        .split("/")
-        .filter(Boolean);
+  }
 
-    const uploadIndex =
-      parts.indexOf(
-        "upload"
-      );
 
-    if (
-      uploadIndex === -1
-    ) {
-      return null;
-    }
 
-    const publicParts =
-      parts.slice(
-        uploadIndex + 1
-      );
+  try {
 
-    if (
-      publicParts[0] &&
-      /^v\d+$/.test(
-        publicParts[0]
-      )
-    ) {
-      publicParts.shift();
-    }
+    const parsed =
 
-    if (
-      !publicParts.length
-    ) {
-      return null;
-    }
+      new URL(imageUrl);
 
-    const lastPart =
-      publicParts.pop();
 
-    const withoutExtension =
-  lastPart.replace(
-    /\.[^/.]+$/,
-    ""
-  );
 
-    return [
-      ...publicParts,
-      withoutExtension,
-    ].join("/");
-  } catch {
-    return null;
-  }
+    if (
+
+      !parsed.hostname.endsWith(
+
+        "res.cloudinary.com"
+
+      )
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const parts =
+
+      parsed.pathname
+
+        .split("/")
+
+        .filter(Boolean);
+
+
+
+    const uploadIndex =
+
+      parts.indexOf(
+
+        "upload"
+
+      );
+
+
+
+    if (
+
+      uploadIndex === -1
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const publicParts =
+
+      parts.slice(
+
+        uploadIndex + 1
+
+      );
+
+
+
+    if (
+
+      publicParts[0] &&
+
+      /^v\d+$/.test(
+
+        publicParts[0]
+
+      )
+
+    ) {
+
+      publicParts.shift();
+
+    }
+
+
+
+    if (
+
+      !publicParts.length
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const lastPart =
+
+      publicParts.pop();
+
+
+
+    const withoutExtension =
+
+  lastPart.replace(
+
+    /\.[^/.]+$/,
+
+    ""
+
+  );
+
+
+
+    return [
+
+      ...publicParts,
+
+      withoutExtension,
+
+    ].join("/");
+
+  } catch {
+
+    return null;
+
+  }
+
 };
+
+
 
 const deleteCloudinaryImage = async (
-  imageUrl
+
+  imageUrl
+
 ) => {
-  const publicId =
-    getCloudinaryPublicId(
-      imageUrl
-    );
 
-  if (!publicId) {
-    return;
-  }
+  const publicId =
 
-  try {
-    ensureCloudinaryConfig();
+    getCloudinaryPublicId(
 
-    await cloudinary.uploader.destroy(
-      publicId,
-      {
-        resource_type:
-          "image",
-      }
-    );
-  } catch (error) {
-    console.error(
-      "⚠️ Suppression Cloudinary impossible :",
-      error.message
-    );
-  }
+      imageUrl
+
+    );
+
+
+
+  if (!publicId) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    ensureCloudinaryConfig();
+
+
+
+    await cloudinary.uploader.destroy(
+
+      publicId,
+
+      {
+
+        resource_type:
+
+          "image",
+
+      }
+
+    );
+
+  } catch (error) {
+
+    console.error(
+
+      "⚠️ Suppression Cloudinary impossible :",
+
+      error.message
+
+    );
+
+  }
+
 };
+
+
 
 const getCurrentUser = async (
-  req
-) => {
-  if (!req.user?.id) {
-    return null;
-  }
 
-  return User.findById(
-    req.user.id
-  ).populate(
-    "centre",
-    "name code active"
-  );
+  req
+
+) => {
+
+  if (!req.user?.id) {
+
+    return null;
+
+  }
+
+
+
+  return User.findById(
+
+    req.user.id
+
+  ).populate(
+
+    "centre",
+
+    "name code active"
+
+  );
+
 };
+
+
 
 const getRequestedCentreId = (
-  req,
-  currentUser,
-  {
-    requiredForSuperAdmin =
-      false,
-    bodyFirst = false,
-  } = {}
+
+  req,
+
+  currentUser,
+
+  {
+
+    requiredForSuperAdmin =
+
+      false,
+
+    bodyFirst = false,
+
+  } = {}
+
 ) => {
-  if (
-    currentUser.role !==
-    "SUPER_ADMIN"
-  ) {
-    return String(
-      currentUser.centre?._id ||
-        currentUser.centre ||
-        ""
-    );
-  }
 
-  const queryCentre =
-    req.query?.centre;
+  if (
 
-  const bodyCentre =
-    req.body?.centre;
+    currentUser.role !==
 
-  const requested =
-    bodyFirst
-      ? bodyCentre ||
-        queryCentre
-      : queryCentre ||
-        bodyCentre;
+    "SUPER_ADMIN"
 
-  if (
-    requested &&
-    requested !== "all"
-  ) {
-    return String(requested);
-  }
+  ) {
 
-  if (
-    requiredForSuperAdmin
-  ) {
-    return "";
-  }
+    return String(
 
-  return null;
+      currentUser.centre?._id ||
+
+        currentUser.centre ||
+
+        ""
+
+    );
+
+  }
+
+
+
+  const queryCentre =
+
+    req.query?.centre;
+
+
+
+  const bodyCentre =
+
+    req.body?.centre;
+
+
+
+  const requested =
+
+    bodyFirst
+
+      ? bodyCentre ||
+
+        queryCentre
+
+      : queryCentre ||
+
+        bodyCentre;
+
+
+
+  if (
+
+    requested &&
+
+    requested !== "all"
+
+  ) {
+
+    return String(requested);
+
+  }
+
+
+
+  if (
+
+    requiredForSuperAdmin
+
+  ) {
+
+    return "";
+
+  }
+
+
+
+  return null;
+
 };
 
-const getAvanceDetails = async (
-  avance
-) => {
-  const avanceId = String(
-    avance._id
-  );
 
-  const centreId =
-    avance.centre?._id ||
-    avance.centre;
+
+const getAvanceDetails = async (
+
+  avance
+
+) => {
+
+  const avanceId = String(
+
+    avance._id
+
+  );
+
+
+
+  const centreId =
+
+    avance.centre?._id ||
+
+    avance.centre;
+
+
+
+  const bons =
+
+    await Gasoil.find({
+
+      centre: centreId,
+
+      $or: [
+
+        {
+
+          "allocations.avance":
+
+            avance._id,
+
+        },
+
+        {
+
+          avance:
+
+            avance._id,
+
+        },
+
+      ],
+
+    })
+
+      .select(
+
+        "avance allocations prixTotal quantite"
+
+      )
+
+      .lean();
+
+
+
+  let consomme = 0;
+
+  let litres = 0;
+
+  let nombreBons = 0;
+
+
+
+  for (const bon of bons) {
+
+    const allocations =
+
+      Array.isArray(
+
+        bon.allocations
+
+      )
+
+        ? bon.allocations
+
+        : [];
+
+
+
+    const matching =
+
+      allocations.find(
+
+        (item) =>
+
+          String(
+
+            item.avance
+
+          ) === avanceId
+
+      );
+
+
+
+    let montantUtilise = 0;
+
+
+
+    if (matching) {
+
+      montantUtilise =
+
+        Number(
+
+          matching.montant ||
+
+            0
+
+        );
+
+    } else if (
+
+      allocations.length === 0 &&
+
+      String(
+
+        bon.avance || ""
+
+      ) === avanceId
+
+    ) {
+
+      // Legacy bon created before multi-cheque allocation.
+
+      montantUtilise =
+
+        Number(
+
+          bon.prixTotal || 0
+
+        );
+
+    }
+
+
+
+    if (montantUtilise <= 0) {
+
+      continue;
+
+    }
+
+
+
+    consomme +=
+
+      montantUtilise;
+
+
+
+    nombreBons += 1;
+
+
+
+    const prixBon =
+
+      Number(
+
+        bon.prixTotal || 0
+
+      );
+
+
+
+    const quantiteBon =
+
+      Number(
+
+        bon.quantite || 0
+
+      );
+
+
+
+    if (prixBon > 0) {
+
+      litres +=
+
+        quantiteBon *
+
+        (montantUtilise /
+
+          prixBon);
+
+    }
+
+  }
+
+
+
+  consomme =
+
+    Number(
+
+      consomme.toFixed(2)
+
+    );
+
+
+
+  litres =
+
+    Number(
+
+      litres.toFixed(2)
+
+    );
+
+
+
+  const solde =
+    Number(
+      (
+        Number(avance.montant) -
+        consomme
+      ).toFixed(2)
+    );
+
+
+
+  const pourcentage =
+
+    Number(
+
+      avance.montant
+
+    ) > 0
+
+      ? (consomme /
+
+          Number(
+
+            avance.montant
+
+          )) *
+
+        100
+
+      : 0;
+
+
+
+  const plain =
+
+    avance.toObject();
+
+
+
+  return {
+
+    ...plain,
+
+    consomme,
+
+    solde,
+
+    pourcentage,
+
+    litres,
+
+    nombreBons,
+
+  };
+
+};
+
+
+
+const rebalanceCentreBons = async (
+  centreId
+) => {
+  const avances =
+    await Avance.find({
+      centre: centreId,
+    }).sort({
+      date: 1,
+      createdAt: 1,
+    });
+
+  if (!avances.length) {
+    return;
+  }
 
   const bons =
     await Gasoil.find({
       centre: centreId,
-      $or: [
-        {
-          "allocations.avance":
-            avance._id,
-        },
-        {
-          avance:
-            avance._id,
-        },
-      ],
-    })
-      .select(
-        "avance allocations prixTotal quantite"
-      )
-      .lean();
+    }).sort({
+      date: 1,
+      createdAt: 1,
+    });
 
-  let consomme = 0;
-  let litres = 0;
-  let nombreBons = 0;
+  const remaining =
+    new Map(
+      avances.map(
+        (avance) => [
+          String(avance._id),
+          Number(
+            Number(
+              avance.montant || 0
+            ).toFixed(2)
+          ),
+        ]
+      )
+    );
 
   for (const bon of bons) {
-    const allocations =
-      Array.isArray(
-        bon.allocations
-      )
-        ? bon.allocations
-        : [];
-
-    const matching =
-      allocations.find(
-        (item) =>
-          String(
-            item.avance
-          ) === avanceId
-      );
-
-    let montantUtilise = 0;
-
-    if (matching) {
-      montantUtilise =
-        Number(
-          matching.montant ||
-            0
-        );
-    } else if (
-      allocations.length === 0 &&
-      String(
-        bon.avance || ""
-      ) === avanceId
-    ) {
-      // Legacy bon created before multi-cheque allocation.
-      montantUtilise =
+    let aRepartir =
+      Number(
         Number(
           bon.prixTotal || 0
+        ).toFixed(2)
+      );
+
+    const allocations = [];
+
+    for (const avance of avances) {
+      if (aRepartir <= 0.005) {
+        break;
+      }
+
+      const id =
+        String(avance._id);
+
+      const disponible =
+        Math.max(
+          Number(
+            remaining.get(id) || 0
+          ),
+          0
+        );
+
+      if (disponible <= 0.005) {
+        continue;
+      }
+
+      const pris =
+        Number(
+          Math.min(
+            disponible,
+            aRepartir
+          ).toFixed(2)
+        );
+
+      allocations.push({
+        avance: avance._id,
+        montant: pris,
+      });
+
+      remaining.set(
+        id,
+        Number(
+          (
+            disponible -
+            pris
+          ).toFixed(2)
+        )
+      );
+
+      aRepartir =
+        Number(
+          (
+            aRepartir -
+            pris
+          ).toFixed(2)
         );
     }
 
-    if (montantUtilise <= 0) {
-      continue;
+    // Keep any uncovered amount as debt on the newest cheque.
+    if (aRepartir > 0.005) {
+      const newest =
+        avances[
+          avances.length - 1
+        ];
+
+      const newestId =
+        String(newest._id);
+
+      const existing =
+        allocations.find(
+          (item) =>
+            String(item.avance) ===
+            newestId
+        );
+
+      if (existing) {
+        existing.montant =
+          Number(
+            (
+              Number(existing.montant || 0) +
+              aRepartir
+            ).toFixed(2)
+          );
+      } else {
+        allocations.push({
+          avance: newest._id,
+          montant: Number(aRepartir.toFixed(2)),
+        });
+      }
+
+      remaining.set(
+        newestId,
+        Number(
+          (
+            Number(
+              remaining.get(newestId) || 0
+            ) -
+            aRepartir
+          ).toFixed(2)
+        )
+      );
     }
 
-    consomme +=
-      montantUtilise;
+    const primary =
+      allocations[0]?.avance;
 
-    nombreBons += 1;
-
-    const prixBon =
-      Number(
-        bon.prixTotal || 0
-      );
-
-    const quantiteBon =
-      Number(
-        bon.quantite || 0
-      );
-
-    if (prixBon > 0) {
-      litres +=
-        quantiteBon *
-        (montantUtilise /
-          prixBon);
+    if (primary) {
+      bon.avance = primary;
+      bon.allocations = allocations;
+      await bon.save();
     }
   }
-
-  consomme =
-    Number(
-      consomme.toFixed(2)
-    );
-
-  litres =
-    Number(
-      litres.toFixed(2)
-    );
-
-  const solde = Math.max(
-    Number(
-      (
-        Number(
-          avance.montant
-        ) - consomme
-      ).toFixed(2)
-    ),
-    0
-  );
-
-  const pourcentage =
-    Number(
-      avance.montant
-    ) > 0
-      ? (consomme /
-          Number(
-            avance.montant
-          )) *
-        100
-      : 0;
-
-  const plain =
-    avance.toObject();
-
-  return {
-    ...plain,
-    consomme,
-    solde,
-    pourcentage,
-    litres,
-    nombreBons,
-  };
 };
+
 
 const syncAvanceStatus = async (
-  avance
+
+  avance
+
 ) => {
-  const details =
-    await getAvanceDetails(
-      avance
-    );
 
-  const expectedStatus =
-    Number(details.solde) >
-    0.005
-      ? "ACTIVE"
-      : "CLOTUREE";
+  const details =
 
-  if (
-    avance.statut !==
-    expectedStatus
-  ) {
-    avance.statut =
-      expectedStatus;
+    await getAvanceDetails(
 
-    await avance.save();
-  }
+      avance
 
-  return {
-    ...details,
-    statut:
-      expectedStatus,
-  };
+    );
+
+
+
+  const expectedStatus =
+
+    Number(details.solde) >
+
+    0.005
+
+      ? "ACTIVE"
+
+      : "CLOTUREE";
+
+
+
+  if (
+
+    avance.statut !==
+
+    expectedStatus
+
+  ) {
+
+    avance.statut =
+
+      expectedStatus;
+
+
+
+    await avance.save();
+
+  }
+
+
+
+  return {
+
+    ...details,
+
+    statut:
+
+      expectedStatus,
+
+  };
+
 };
 
+
+
 // ==========================================================
+
 // GET ALL
+
 // ==========================================================
+
+
 
 router.get(
-  "/",
-  async (req, res) => {
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  "/",
 
-      const centreId =
-        getRequestedCentreId(
-          req,
-          currentUser
-        );
+  async (req, res) => {
 
-      const query = {};
+    try {
 
-      if (centreId) {
-        query.centre =
-          centreId;
-      }
+      const currentUser =
 
-      const avances =
-        await Avance.find(
-          query
-        )
-          .populate(
-            "centre",
-            "name code active"
-          )
-          .sort({
-            date: -1,
-            createdAt: -1,
-          });
+        await getCurrentUser(
 
-      const result = [];
+          req
 
-      for (
-        const avance of avances
-      ) {
-        result.push(
-          await syncAvanceStatus(
-            avance
-          )
-        );
-      }
+        );
 
-      res.json(result);
-    } catch (error) {
-      console.error(error);
 
-      res.status(500).json({
-        message:
-          "Erreur lors du chargement des avances.",
-      });
-    }
-  }
+
+      if (!currentUser) {
+
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      const centreId =
+
+        getRequestedCentreId(
+
+          req,
+
+          currentUser
+
+        );
+
+
+
+      const query = {};
+
+
+
+      if (centreId) {
+
+        query.centre =
+
+          centreId;
+
+      }
+
+
+
+      const avances =
+
+        await Avance.find(
+
+          query
+
+        )
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          )
+
+          .sort({
+
+            date: -1,
+
+            createdAt: -1,
+
+          });
+
+
+
+      const result = [];
+
+
+
+      for (
+
+        const avance of avances
+
+      ) {
+
+        result.push(
+
+          await syncAvanceStatus(
+
+            avance
+
+          )
+
+        );
+
+      }
+
+
+
+      res.json(result);
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors du chargement des avances.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // GET ACTIVE FOR CURRENT / SELECTED CENTRE
+
 // ==========================================================
+
+
 
 router.get(
-  "/active",
-  async (req, res) => {
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  "/active",
 
-      const centreId =
-        getRequestedCentreId(
-          req,
-          currentUser,
-          {
-            requiredForSuperAdmin:
-              true,
-          }
-        );
+  async (req, res) => {
 
-      if (!centreId) {
-        return res.json(null);
-      }
+    try {
 
-      const avances =
-        await Avance.find({
-          centre: centreId,
-        })
-          .populate(
-            "centre",
-            "name code active"
-          )
-          .sort({
-            date: 1,
-            createdAt: 1,
-          });
+      const currentUser =
 
-      let activeDetails = null;
+        await getCurrentUser(
 
-      for (
-        const avance of avances
-      ) {
-        const details =
-          await syncAvanceStatus(
-            avance
-          );
+          req
 
-        if (
-          !activeDetails &&
-          details.statut ===
-            "ACTIVE"
-        ) {
-          activeDetails =
-            details;
-        }
-      }
+        );
 
-      res.json(
-        activeDetails
-      );
-    } catch (error) {
-      console.error(error);
 
-      res.status(500).json({
-        message:
-          "Erreur lors du chargement de l'avance active.",
-      });
-    }
-  }
+
+      if (!currentUser) {
+
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      const centreId =
+
+        getRequestedCentreId(
+
+          req,
+
+          currentUser,
+
+          {
+
+            requiredForSuperAdmin:
+
+              true,
+
+          }
+
+        );
+
+
+
+      if (!centreId) {
+
+        return res.json(null);
+
+      }
+
+
+
+      const avances =
+
+        await Avance.find({
+
+          centre: centreId,
+
+        })
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          )
+
+          .sort({
+
+            date: 1,
+
+            createdAt: 1,
+
+          });
+
+
+
+      let activeDetails = null;
+
+
+
+      for (
+
+        const avance of avances
+
+      ) {
+
+        const details =
+
+          await syncAvanceStatus(
+
+            avance
+
+          );
+
+
+
+        if (
+
+          !activeDetails &&
+
+          details.statut ===
+
+            "ACTIVE"
+
+        ) {
+
+          activeDetails =
+
+            details;
+
+        }
+
+      }
+
+
+
+      res.json(
+
+        activeDetails
+
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors du chargement de l'avance active.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // CREATE NEW ADVANCE
+
 // ==========================================================
+
+
 
 router.post(
-  "/",
-  upload.single(
-    "imageCheque"
-  ),
-  async (req, res) => {
-    let uploadedImageUrl =
-      "";
 
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
+  "/",
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  upload.single(
 
-      if (
-        currentUser.role ===
-        "USER"
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Seuls les administrateurs peuvent créer une avance.",
-          });
-      }
+    "imageCheque"
 
-      const centreId =
-        getRequestedCentreId(
-          req,
-          currentUser,
-          {
-            requiredForSuperAdmin:
-              true,
-            bodyFirst: true,
-          }
-        );
+  ),
 
-      if (!centreId) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Sélectionnez un centre avant de créer une avance.",
-          });
-      }
+  async (req, res) => {
 
-      const centre =
-        await Centre.findById(
-          centreId
-        );
+    let uploadedImageUrl =
 
-      if (
-        !centre ||
-        centre.active === false
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Centre invalide ou désactivé.",
-          });
-      }
+      "";
 
-      const {
-        date,
-        montant,
-        numeroCheque,
-        station,
-        banque,
-        observation,
-      } = req.body;
 
-      if (
-        !date ||
-        !montant ||
-        !numeroCheque ||
-        !station
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Date, montant, numéro de chèque et station sont obligatoires.",
-          });
-      }
 
-      const montantNumber =
-        Number(montant);
+    try {
 
-      if (
-        Number.isNaN(
-          montantNumber
-        ) ||
-        montantNumber <= 0
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Le montant de l'avance est invalide.",
-          });
-      }
+      const currentUser =
 
-      const duplicate =
-        await Avance.findOne({
-          centre:
-            centre._id,
-          numeroCheque:
-            String(
-              numeroCheque
-            ).trim(),
-        });
+        await getCurrentUser(
 
-      if (duplicate) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de chèque existe déjà dans ce centre.",
-          });
-      }
+          req
 
-      if (req.file) {
-        const uploadResult =
-          await uploadImageToCloudinary(
-            req.file,
-            `suivi-gasoil/${centre.code.toLowerCase()}/cheques`
-          );
+        );
 
-        uploadedImageUrl =
-          uploadResult.secure_url;
-      }
 
-      const avance =
-        new Avance({
-          centre:
-            centre._id,
-          date,
-          montant:
-            montantNumber,
-          numeroCheque:
-            String(
-              numeroCheque
-            ).trim(),
-          station:
-            String(
-              station
-            ).trim(),
-          banque:
-            String(
-              banque || ""
-            ).trim(),
-          observation:
-            String(
-              observation || ""
-            ).trim(),
-          imageCheque:
-            uploadedImageUrl,
-          statut:
-            "ACTIVE",
-        });
 
-      await avance.save();
+      if (!currentUser) {
 
-      await avance.populate(
-        "centre",
-        "name code active"
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      if (
+
+        currentUser.role ===
+
+        "USER"
+
+      ) {
+
+        return res
+
+          .status(403)
+
+          .json({
+
+            message:
+
+              "Seuls les administrateurs peuvent créer une avance.",
+
+          });
+
+      }
+
+
+
+      const centreId =
+
+        getRequestedCentreId(
+
+          req,
+
+          currentUser,
+
+          {
+
+            requiredForSuperAdmin:
+
+              true,
+
+            bodyFirst: true,
+
+          }
+
+        );
+
+
+
+      if (!centreId) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Sélectionnez un centre avant de créer une avance.",
+
+          });
+
+      }
+
+
+
+      const centre =
+
+        await Centre.findById(
+
+          centreId
+
+        );
+
+
+
+      if (
+
+        !centre ||
+
+        centre.active === false
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Centre invalide ou désactivé.",
+
+          });
+
+      }
+
+
+
+      const {
+
+        date,
+
+        montant,
+
+        numeroCheque,
+
+        station,
+
+        banque,
+
+        observation,
+
+      } = req.body;
+
+
+
+      if (
+
+        !date ||
+
+        !montant ||
+
+        !numeroCheque ||
+
+        !station
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Date, montant, numéro de chèque et station sont obligatoires.",
+
+          });
+
+      }
+
+
+
+      const montantNumber =
+
+        Number(montant);
+
+
+
+      if (
+
+        Number.isNaN(
+
+          montantNumber
+
+        ) ||
+
+        montantNumber <= 0
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Le montant de l'avance est invalide.",
+
+          });
+
+      }
+
+
+
+      const duplicate =
+
+        await Avance.findOne({
+
+          centre:
+
+            centre._id,
+
+          numeroCheque:
+
+            String(
+
+              numeroCheque
+
+            ).trim(),
+
+        });
+
+
+
+      if (duplicate) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de chèque existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      if (req.file) {
+
+        const uploadResult =
+
+          await uploadImageToCloudinary(
+
+            req.file,
+
+            `suivi-gasoil/${centre.code.toLowerCase()}/cheques`
+
+          );
+
+
+
+        uploadedImageUrl =
+
+          uploadResult.secure_url;
+
+      }
+
+
+
+      const avance =
+
+        new Avance({
+
+          centre:
+
+            centre._id,
+
+          date,
+
+          montant:
+
+            montantNumber,
+
+          numeroCheque:
+
+            String(
+
+              numeroCheque
+
+            ).trim(),
+
+          station:
+
+            String(
+
+              station
+
+            ).trim(),
+
+          banque:
+
+            String(
+
+              banque || ""
+
+            ).trim(),
+
+          observation:
+
+            String(
+
+              observation || ""
+
+            ).trim(),
+
+          imageCheque:
+
+            uploadedImageUrl,
+
+          statut:
+
+            "ACTIVE",
+
+        });
+
+
+
+      await avance.save();
+
+      // New cheque absorbs any previous negative balance automatically.
+      await rebalanceCentreBons(
+        centre._id
       );
 
-      res.status(201).json(
-        await getAvanceDetails(
-          avance
-        )
-      );
-    } catch (error) {
-      console.error(error);
+      const centreAvances =
+        await Avance.find({
+          centre: centre._id,
+        });
 
-      if (
-        uploadedImageUrl
-      ) {
-        await deleteCloudinaryImage(
-          uploadedImageUrl
-        );
+      for (const item of centreAvances) {
+        await syncAvanceStatus(item);
       }
 
-      if (
-        error.code === 11000
-      ) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de chèque existe déjà dans ce centre.",
-          });
-      }
 
-      res.status(500).json({
-        message:
-          "Erreur lors de l'enregistrement de l'avance.",
-      });
-    }
-  }
+
+
+      await avance.populate(
+
+        "centre",
+
+        "name code active"
+
+      );
+
+
+
+      res.status(201).json(
+
+        await getAvanceDetails(
+
+          avance
+
+        )
+
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      if (
+
+        uploadedImageUrl
+
+      ) {
+
+        await deleteCloudinaryImage(
+
+          uploadedImageUrl
+
+        );
+
+      }
+
+
+
+      if (
+
+        error.code === 11000
+
+      ) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de chèque existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors de l'enregistrement de l'avance.",
+
+      });
+
+    }
+
+  }
+
 );
+
+
 
 module.exports = router;

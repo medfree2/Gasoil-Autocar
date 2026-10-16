@@ -1,474 +1,946 @@
 const express = require("express");
+
 const multer = require("multer");
+
 const cloudinary = require("cloudinary").v2;
 
+
+
 const Gasoil = require("../models/Gasoil");
+
 const Avance = require("../models/Avance");
+
 const User = require("../models/User");
+
 const Centre = require("../models/Centre");
 
+
+
 cloudinary.config({
-  cloud_name:
-    process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:
-    process.env.CLOUDINARY_API_KEY,
-  api_secret:
-    process.env.CLOUDINARY_API_SECRET,
+
+  cloud_name:
+
+    process.env.CLOUDINARY_CLOUD_NAME,
+
+  api_key:
+
+    process.env.CLOUDINARY_API_KEY,
+
+  api_secret:
+
+    process.env.CLOUDINARY_API_SECRET,
+
 });
+
+
 
 const router = express.Router();
 
+
+
 const ensureCloudinaryConfig = () => {
-  if (
-    !process.env.CLOUDINARY_CLOUD_NAME ||
-    !process.env.CLOUDINARY_API_KEY ||
-    !process.env.CLOUDINARY_API_SECRET
-  ) {
-    throw new Error(
-      "Configuration Cloudinary manquante."
-    );
-  }
+
+  if (
+
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+
+    !process.env.CLOUDINARY_API_KEY ||
+
+    !process.env.CLOUDINARY_API_SECRET
+
+  ) {
+
+    throw new Error(
+
+      "Configuration Cloudinary manquante."
+
+    );
+
+  }
+
 };
+
+
 
 const fileFilter = (
-  req,
-  file,
-  cb
-) => {
-  const allowedTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-  ];
 
-  if (
-    allowedTypes.includes(
-      file.mimetype
-    )
-  ) {
-    cb(null, true);
-  } else {
-    cb(
-      new Error(
-        "Seules les images JPG, PNG et WEBP sont autorisées."
-      )
-    );
-  }
+  req,
+
+  file,
+
+  cb
+
+) => {
+
+  const allowedTypes = [
+
+    "image/jpeg",
+
+    "image/jpg",
+
+    "image/png",
+
+    "image/webp",
+
+  ];
+
+
+
+  if (
+
+    allowedTypes.includes(
+
+      file.mimetype
+
+    )
+
+  ) {
+
+    cb(null, true);
+
+  } else {
+
+    cb(
+
+      new Error(
+
+        "Seules les images JPG, PNG et WEBP sont autorisées."
+
+      )
+
+    );
+
+  }
+
 };
+
+
 
 const upload = multer({
-  storage:
-    multer.memoryStorage(),
-  fileFilter,
-  limits: {
-    fileSize:
-      10 * 1024 * 1024,
-  },
+
+  storage:
+
+    multer.memoryStorage(),
+
+  fileFilter,
+
+  limits: {
+
+    fileSize:
+
+      10 * 1024 * 1024,
+
+  },
+
 });
 
+
+
 const uploadImageToCloudinary = (
-  file,
-  folder
+
+  file,
+
+  folder
+
 ) =>
-  new Promise(
-    (resolve, reject) => {
-      ensureCloudinaryConfig();
 
-      const stream =
-        cloudinary.uploader.upload_stream(
-          {
-            folder,
-            resource_type:
-              "image",
-            use_filename:
-              false,
-            unique_filename:
-              true,
-            overwrite:
-              false,
-            transformation: [
-              {
-                width: 1800,
-                height: 1800,
-                crop: "limit",
-                quality:
-                  "auto:good",
-              },
-            ],
-          },
-          (
-            error,
-            result
-          ) => {
-            if (error) {
-              reject(error);
-              return;
-            }
+  new Promise(
 
-            resolve(result);
-          }
-        );
+    (resolve, reject) => {
 
-      stream.end(
-        file.buffer
-      );
-    }
-  );
+      ensureCloudinaryConfig();
+
+
+
+      const stream =
+
+        cloudinary.uploader.upload_stream(
+
+          {
+
+            folder,
+
+            resource_type:
+
+              "image",
+
+            use_filename:
+
+              false,
+
+            unique_filename:
+
+              true,
+
+            overwrite:
+
+              false,
+
+            transformation: [
+
+              {
+
+                width: 1800,
+
+                height: 1800,
+
+                crop: "limit",
+
+                quality:
+
+                  "auto:good",
+
+              },
+
+            ],
+
+          },
+
+          (
+
+            error,
+
+            result
+
+          ) => {
+
+            if (error) {
+
+              reject(error);
+
+              return;
+
+            }
+
+
+
+            resolve(result);
+
+          }
+
+        );
+
+
+
+      stream.end(
+
+        file.buffer
+
+      );
+
+    }
+
+  );
+
+
 
 const getCloudinaryPublicId = (
-  imageUrl
+
+  imageUrl
+
 ) => {
-  if (!imageUrl) {
-    return null;
-  }
 
-  try {
-    const parsed =
-      new URL(imageUrl);
+  if (!imageUrl) {
 
-    if (
-      !parsed.hostname.endsWith(
-        "res.cloudinary.com"
-      )
-    ) {
-      return null;
-    }
+    return null;
 
-    const parts =
-      parsed.pathname
-        .split("/")
-        .filter(Boolean);
+  }
 
-    const uploadIndex =
-      parts.indexOf(
-        "upload"
-      );
 
-    if (
-      uploadIndex === -1
-    ) {
-      return null;
-    }
 
-    const publicParts =
-      parts.slice(
-        uploadIndex + 1
-      );
+  try {
 
-    if (
-      publicParts[0] &&
-      /^v\d+$/.test(
-        publicParts[0]
-      )
-    ) {
-      publicParts.shift();
-    }
+    const parsed =
 
-    if (
-      !publicParts.length
-    ) {
-      return null;
-    }
+      new URL(imageUrl);
 
-    const lastPart =
-      publicParts.pop();
 
-    const withoutExtension =
-      lastPart.replace(
-        /\.[^/.]+$/,
-        ""
-      );
 
-    return [
-      ...publicParts,
-      withoutExtension,
-    ].join("/");
-  } catch {
-    return null;
-  }
+    if (
+
+      !parsed.hostname.endsWith(
+
+        "res.cloudinary.com"
+
+      )
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const parts =
+
+      parsed.pathname
+
+        .split("/")
+
+        .filter(Boolean);
+
+
+
+    const uploadIndex =
+
+      parts.indexOf(
+
+        "upload"
+
+      );
+
+
+
+    if (
+
+      uploadIndex === -1
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const publicParts =
+
+      parts.slice(
+
+        uploadIndex + 1
+
+      );
+
+
+
+    if (
+
+      publicParts[0] &&
+
+      /^v\d+$/.test(
+
+        publicParts[0]
+
+      )
+
+    ) {
+
+      publicParts.shift();
+
+    }
+
+
+
+    if (
+
+      !publicParts.length
+
+    ) {
+
+      return null;
+
+    }
+
+
+
+    const lastPart =
+
+      publicParts.pop();
+
+
+
+    const withoutExtension =
+
+      lastPart.replace(
+
+        /\.[^/.]+$/,
+
+        ""
+
+      );
+
+
+
+    return [
+
+      ...publicParts,
+
+      withoutExtension,
+
+    ].join("/");
+
+  } catch {
+
+    return null;
+
+  }
+
 };
+
+
 
 const deleteCloudinaryImage = async (
-  imageUrl
+
+  imageUrl
+
 ) => {
-  const publicId =
-    getCloudinaryPublicId(
-      imageUrl
-    );
 
-  if (!publicId) {
-    return;
-  }
+  const publicId =
 
-  try {
-    ensureCloudinaryConfig();
+    getCloudinaryPublicId(
 
-    await cloudinary.uploader.destroy(
-      publicId,
-      {
-        resource_type:
-          "image",
-      }
-    );
-  } catch (error) {
-    console.error(
-      "⚠️ Suppression Cloudinary impossible :",
-      error.message
-    );
-  }
+      imageUrl
+
+    );
+
+
+
+  if (!publicId) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    ensureCloudinaryConfig();
+
+
+
+    await cloudinary.uploader.destroy(
+
+      publicId,
+
+      {
+
+        resource_type:
+
+          "image",
+
+      }
+
+    );
+
+  } catch (error) {
+
+    console.error(
+
+      "⚠️ Suppression Cloudinary impossible :",
+
+      error.message
+
+    );
+
+  }
+
 };
+
+
 
 const getCurrentUser = async (
-  req
-) => {
-  if (!req.user?.id) {
-    return null;
-  }
 
-  return User.findById(
-    req.user.id
-  ).populate(
-    "centre",
-    "name code active"
-  );
+  req
+
+) => {
+
+  if (!req.user?.id) {
+
+    return null;
+
+  }
+
+
+
+  return User.findById(
+
+    req.user.id
+
+  ).populate(
+
+    "centre",
+
+    "name code active"
+
+  );
+
 };
+
+
 
 const getActionUserSnapshot = async (
-  req,
-  currentUser = null
+
+  req,
+
+  currentUser = null
+
 ) => {
-  const user =
-    currentUser ||
-    (await getCurrentUser(
-      req
-    ));
 
-  if (!user) {
-    return {
-      userId:
-        req.user?.id ||
-        null,
-      name:
-        req.user?.name ||
-        "",
-      matricule:
-        req.user?.matricule ||
-        "",
-      email:
-        req.user?.email ||
-        "",
-    };
-  }
+  const user =
 
-  return {
-    userId: user._id,
-    name: user.name || "",
-    matricule:
-      user.matricule || "",
-    email:
-      user.email || "",
-  };
+    currentUser ||
+
+    (await getCurrentUser(
+
+      req
+
+    ));
+
+
+
+  if (!user) {
+
+    return {
+
+      userId:
+
+        req.user?.id ||
+
+        null,
+
+      name:
+
+        req.user?.name ||
+
+        "",
+
+      matricule:
+
+        req.user?.matricule ||
+
+        "",
+
+      email:
+
+        req.user?.email ||
+
+        "",
+
+    };
+
+  }
+
+
+
+  return {
+
+    userId: user._id,
+
+    name: user.name || "",
+
+    matricule:
+
+      user.matricule || "",
+
+    email:
+
+      user.email || "",
+
+  };
+
 };
+
+
 
 const getRequestedCentreId = (
-  req,
-  currentUser,
-  {
-    requiredForSuperAdmin =
-      false,
-    bodyFirst = false,
-  } = {}
+
+  req,
+
+  currentUser,
+
+  {
+
+    requiredForSuperAdmin =
+
+      false,
+
+    bodyFirst = false,
+
+  } = {}
+
 ) => {
-  if (
-    currentUser.role !==
-    "SUPER_ADMIN"
-  ) {
-    return String(
-      currentUser.centre?._id ||
-        currentUser.centre ||
-        ""
-    );
-  }
 
-  const queryCentre =
-    req.query?.centre;
+  if (
 
-  const bodyCentre =
-    req.body?.centre;
+    currentUser.role !==
 
-  const requested =
-    bodyFirst
-      ? bodyCentre ||
-        queryCentre
-      : queryCentre ||
-        bodyCentre;
+    "SUPER_ADMIN"
 
-  if (
-    requested &&
-    requested !== "all"
-  ) {
-    return String(requested);
-  }
+  ) {
 
-  if (
-    requiredForSuperAdmin
-  ) {
-    return "";
-  }
+    return String(
 
-  return null;
+      currentUser.centre?._id ||
+
+        currentUser.centre ||
+
+        ""
+
+    );
+
+  }
+
+
+
+  const queryCentre =
+
+    req.query?.centre;
+
+
+
+  const bodyCentre =
+
+    req.body?.centre;
+
+
+
+  const requested =
+
+    bodyFirst
+
+      ? bodyCentre ||
+
+        queryCentre
+
+      : queryCentre ||
+
+        bodyCentre;
+
+
+
+  if (
+
+    requested &&
+
+    requested !== "all"
+
+  ) {
+
+    return String(requested);
+
+  }
+
+
+
+  if (
+
+    requiredForSuperAdmin
+
+  ) {
+
+    return "";
+
+  }
+
+
+
+  return null;
+
 };
+
+
 
 const assertCentreAvailable = async (
-  centreId
+
+  centreId
+
 ) => {
-  if (!centreId) {
-    return null;
-  }
 
-  const centre =
-    await Centre.findById(
-      centreId
-    );
+  if (!centreId) {
 
-  if (
-    !centre ||
-    centre.active === false
-  ) {
-    return null;
-  }
+    return null;
 
-  return centre;
+  }
+
+
+
+  const centre =
+
+    await Centre.findById(
+
+      centreId
+
+    );
+
+
+
+  if (
+
+    !centre ||
+
+    centre.active === false
+
+  ) {
+
+    return null;
+
+  }
+
+
+
+  return centre;
+
 };
+
+
 
 const canAccessRecord = (
-  currentUser,
-  record
-) => {
-  if (
-    currentUser.role ===
-    "SUPER_ADMIN"
-  ) {
-    return true;
-  }
 
-  return (
-    String(record.centre) ===
-    String(
-      currentUser.centre?._id ||
-        currentUser.centre
-    )
-  );
+  currentUser,
+
+  record
+
+) => {
+
+  if (
+
+    currentUser.role ===
+
+    "SUPER_ADMIN"
+
+  ) {
+
+    return true;
+
+  }
+
+
+
+  return (
+
+    String(record.centre) ===
+
+    String(
+
+      currentUser.centre?._id ||
+
+        currentUser.centre
+
+    )
+
+  );
+
 };
 
+
+
 const getUsedAmountForAdvance =
-  async (
-    avance,
-    excludeGasoilId = null
-  ) => {
-    const query = {
-      centre: avance.centre,
-      $or: [
-        {
-          "allocations.avance":
-            avance._id,
-        },
-        {
-          avance:
-            avance._id,
-        },
-      ],
-    };
 
-    if (excludeGasoilId) {
-      query._id = {
-        $ne:
-          excludeGasoilId,
-      };
-    }
+  async (
 
-    const bons =
-      await Gasoil.find(
-        query
-      )
-        .select(
-          "avance allocations prixTotal"
-        )
-        .lean();
+    avance,
 
-    const avanceId =
-      String(
-        avance._id
-      );
+    excludeGasoilId = null
 
-    let used = 0;
+  ) => {
 
-    for (const bon of bons) {
-      const allocations =
-        Array.isArray(
-          bon.allocations
-        )
-          ? bon.allocations
-          : [];
+    const query = {
 
-      const matching =
-        allocations.find(
-          (item) =>
-            String(
-              item.avance
-            ) === avanceId
-        );
+      centre: avance.centre,
 
-      if (matching) {
-        used +=
-          Number(
-            matching.montant ||
-              0
-          );
-      } else if (
-        allocations.length ===
-          0 &&
-        String(
-          bon.avance || ""
-        ) === avanceId
-      ) {
-        // Legacy bon: its full amount belongs to its old single advance.
-        used +=
-          Number(
-            bon.prixTotal || 0
-          );
-      }
-    }
+      $or: [
 
-    return Number(
-      used.toFixed(2)
-    );
-  };
+        {
+
+          "allocations.avance":
+
+            avance._id,
+
+        },
+
+        {
+
+          avance:
+
+            avance._id,
+
+        },
+
+      ],
+
+    };
+
+
+
+    if (excludeGasoilId) {
+
+      query._id = {
+
+        $ne:
+
+          excludeGasoilId,
+
+      };
+
+    }
+
+
+
+    const bons =
+
+      await Gasoil.find(
+
+        query
+
+      )
+
+        .select(
+
+          "avance allocations prixTotal"
+
+        )
+
+        .lean();
+
+
+
+    const avanceId =
+
+      String(
+
+        avance._id
+
+      );
+
+
+
+    let used = 0;
+
+
+
+    for (const bon of bons) {
+
+      const allocations =
+
+        Array.isArray(
+
+          bon.allocations
+
+        )
+
+          ? bon.allocations
+
+          : [];
+
+
+
+      const matching =
+
+        allocations.find(
+
+          (item) =>
+
+            String(
+
+              item.avance
+
+            ) === avanceId
+
+        );
+
+
+
+      if (matching) {
+
+        used +=
+
+          Number(
+
+            matching.montant ||
+
+              0
+
+          );
+
+      } else if (
+
+        allocations.length ===
+
+          0 &&
+
+        String(
+
+          bon.avance || ""
+
+        ) === avanceId
+
+      ) {
+
+        // Legacy bon: its full amount belongs to its old single advance.
+
+        used +=
+
+          Number(
+
+            bon.prixTotal || 0
+
+          );
+
+      }
+
+    }
+
+
+
+    return Number(
+
+      used.toFixed(2)
+
+    );
+
+  };
+
+
 
 const getRemainingBalance =
-  async (
-    avance,
-    excludeGasoilId = null
-  ) => {
-    const used =
-      await getUsedAmountForAdvance(
-        avance,
-        excludeGasoilId
-      );
 
-    return {
-      used,
-      remaining:
-        Number(
-          (
-            Number(
-              avance.montant
-            ) - used
-          ).toFixed(2)
-        ),
-    };
-  };
+  async (
+
+    avance,
+
+    excludeGasoilId = null
+
+  ) => {
+
+    const used =
+
+      await getUsedAmountForAdvance(
+
+        avance,
+
+        excludeGasoilId
+
+      );
+
+
+
+    return {
+
+      used,
+
+      remaining:
+
+        Number(
+
+          (
+
+            Number(
+
+              avance.montant
+
+            ) - used
+
+          ).toFixed(2)
+
+        ),
+
+    };
+
+  };
+
+
 
 const buildFifoAllocations =
   async (
@@ -484,13 +956,15 @@ const buildFifoAllocations =
         createdAt: 1,
       });
 
-    let aRepartir =
-      Number(
-        Number(
-          montant
-        ).toFixed(2)
-      );
+    if (!avances.length) {
+      return {
+        allocations: [],
+        manque: Number(Number(montant || 0).toFixed(2)),
+        totalDisponible: 0,
+      };
+    }
 
+    let aRepartir = Number(Number(montant).toFixed(2));
     const allocations = [];
     let totalDisponible = 0;
 
@@ -503,14 +977,11 @@ const buildFifoAllocations =
 
       const disponible =
         Math.max(
-          Number(
-            balance.remaining
-          ),
+          Number(balance.remaining),
           0
         );
 
-      totalDisponible +=
-        disponible;
+      totalDisponible += disponible;
 
       if (
         aRepartir <= 0.005 ||
@@ -528,10 +999,8 @@ const buildFifoAllocations =
         );
 
       allocations.push({
-        avance:
-          avance._id,
-        montant:
-          montantPris,
+        avance: avance._id,
+        montant: montantPris,
       });
 
       aRepartir =
@@ -543,916 +1012,1756 @@ const buildFifoAllocations =
         );
     }
 
+    // Never reject a bon for insufficient balance.
+    // The uncovered amount becomes a negative balance on the newest cheque.
+    if (aRepartir > 0.005) {
+      const newestAvance =
+        avances[avances.length - 1];
+
+      const existing =
+        allocations.find(
+          (item) =>
+            String(item.avance) ===
+            String(newestAvance._id)
+        );
+
+      if (existing) {
+        existing.montant =
+          Number(
+            (
+              Number(existing.montant || 0) +
+              aRepartir
+            ).toFixed(2)
+          );
+      } else {
+        allocations.push({
+          avance: newestAvance._id,
+          montant: Number(aRepartir.toFixed(2)),
+        });
+      }
+
+      aRepartir = 0;
+    }
+
     return {
       allocations,
-      manque:
-        Math.max(
-          aRepartir,
-          0
-        ),
+      manque: 0,
       totalDisponible:
-        Number(
-          totalDisponible.toFixed(
-            2
-          )
-        ),
+        Number(totalDisponible.toFixed(2)),
     };
   };
 
+
 const syncCentreAdvanceStatuses =
-  async (
-    centreId
-  ) => {
-    const avances =
-      await Avance.find({
-        centre: centreId,
-      });
 
-    for (const avance of avances) {
-      const balance =
-        await getRemainingBalance(
-          avance
-        );
+  async (
 
-      const expectedStatus =
-        balance.remaining > 0.005
-          ? "ACTIVE"
-          : "CLOTUREE";
+    centreId
 
-      if (
-        avance.statut !==
-        expectedStatus
-      ) {
-        avance.statut =
-          expectedStatus;
+  ) => {
 
-        await avance.save();
-      }
-    }
-  };
+    const avances =
+
+      await Avance.find({
+
+        centre: centreId,
+
+      });
+
+
+
+    for (const avance of avances) {
+
+      const balance =
+
+        await getRemainingBalance(
+
+          avance
+
+        );
+
+
+
+      const expectedStatus =
+
+        balance.remaining > 0.005
+
+          ? "ACTIVE"
+
+          : "CLOTUREE";
+
+
+
+      if (
+
+        avance.statut !==
+
+        expectedStatus
+
+      ) {
+
+        avance.statut =
+
+          expectedStatus;
+
+
+
+        await avance.save();
+
+      }
+
+    }
+
+  };
+
+
 
 // ==========================================================
+
 // GET ALL
+
 // ==========================================================
+
+
 
 router.get(
-  "/",
-  async (req, res) => {
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
 
-      if (
-        !currentUser ||
-        currentUser.active ===
-          false
-      ) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  "/",
 
-      const centreId =
-        getRequestedCentreId(
-          req,
-          currentUser
-        );
+  async (req, res) => {
 
-      const query = {};
+    try {
 
-      if (centreId) {
-        query.centre =
-          centreId;
-      }
+      const currentUser =
 
-      const gasoils =
-        await Gasoil.find(
-          query
-        )
-          .populate(
-            "avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "allocations.avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "centre",
-            "name code active"
-          )
-          .sort({
-            date: -1,
-            createdAt: -1,
-          });
+        await getCurrentUser(
 
-      res.json(gasoils);
-    } catch (error) {
-      console.error(error);
+          req
 
-      res.status(500).json({
-        message:
-          "Erreur lors du chargement des données.",
-      });
-    }
-  }
+        );
+
+
+
+      if (
+
+        !currentUser ||
+
+        currentUser.active ===
+
+          false
+
+      ) {
+
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      const centreId =
+
+        getRequestedCentreId(
+
+          req,
+
+          currentUser
+
+        );
+
+
+
+      const query = {};
+
+
+
+      if (centreId) {
+
+        query.centre =
+
+          centreId;
+
+      }
+
+
+
+      const gasoils =
+
+        await Gasoil.find(
+
+          query
+
+        )
+
+          .populate(
+
+            "avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "allocations.avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          )
+
+          .sort({
+
+            date: -1,
+
+            createdAt: -1,
+
+          });
+
+
+
+      res.json(gasoils);
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors du chargement des données.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // GET ONE
+
 // ==========================================================
+
+
 
 router.get(
-  "/:id",
-  async (req, res) => {
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  "/:id",
 
-      const gasoil =
-        await Gasoil.findById(
-          req.params.id
-        )
-          .populate(
-            "avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "allocations.avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "centre",
-            "name code active"
-          );
+  async (req, res) => {
 
-      if (!gasoil) {
-        return res
-          .status(404)
-          .json({
-            message:
-              "Enregistrement introuvable.",
-          });
-      }
+    try {
 
-      if (
-        !canAccessRecord(
-          currentUser,
-          gasoil
-        )
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Vous n'avez pas accès à ce bon.",
-          });
-      }
+      const currentUser =
 
-      res.json(gasoil);
-    } catch (error) {
-      console.error(error);
+        await getCurrentUser(
 
-      res.status(500).json({
-        message:
-          "Erreur serveur.",
-      });
-    }
-  }
+          req
+
+        );
+
+
+
+      if (!currentUser) {
+
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      const gasoil =
+
+        await Gasoil.findById(
+
+          req.params.id
+
+        )
+
+          .populate(
+
+            "avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "allocations.avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          );
+
+
+
+      if (!gasoil) {
+
+        return res
+
+          .status(404)
+
+          .json({
+
+            message:
+
+              "Enregistrement introuvable.",
+
+          });
+
+      }
+
+
+
+      if (
+
+        !canAccessRecord(
+
+          currentUser,
+
+          gasoil
+
+        )
+
+      ) {
+
+        return res
+
+          .status(403)
+
+          .json({
+
+            message:
+
+              "Vous n'avez pas accès à ce bon.",
+
+          });
+
+      }
+
+
+
+      res.json(gasoil);
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur serveur.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // CREATE
+
 // ==========================================================
+
+
 
 router.post(
-  "/",
-  upload.single(
-    "imageBon"
-  ),
-  async (req, res) => {
-    let uploadedImageUrl =
-      "";
 
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
+  "/",
 
-      if (
-        !currentUser ||
-        currentUser.active ===
-          false
-      ) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  upload.single(
 
-      const centreId =
-        getRequestedCentreId(
-          req,
-          currentUser,
-          {
-            requiredForSuperAdmin:
-              true,
-            bodyFirst: true,
-          }
-        );
+    "imageBon"
 
-      if (!centreId) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Sélectionnez un centre avant d'ajouter un bon.",
-          });
-      }
+  ),
 
-      const centre =
-        await assertCentreAvailable(
-          centreId
-        );
+  async (req, res) => {
 
-      if (!centre) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Centre invalide ou désactivé.",
-          });
-      }
+    let uploadedImageUrl =
 
-      const {
-        date,
-        autocar,
-        depart,
-        quantite,
-        numeroBon,
-        prixTotal,
-        observation,
-      } = req.body;
+      "";
 
-      if (
-        !date ||
-        !autocar ||
-        !depart ||
-        !quantite ||
-        !numeroBon ||
-        !prixTotal
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Veuillez remplir tous les champs obligatoires.",
-          });
-      }
 
-      const duplicate =
-        await Gasoil.findOne({
-          centre:
-            centre._id,
-          numeroBon:
-            String(
-              numeroBon
-            ).trim(),
-        });
 
-      if (duplicate) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de bon existe déjà dans ce centre.",
-          });
-      }
+    try {
 
-      const quantiteNumber =
-        Number(quantite);
+      const currentUser =
 
-      const prixTotalNumber =
-        Number(prixTotal);
+        await getCurrentUser(
 
-      if (
-        !Number.isFinite(
-          quantiteNumber
-        ) ||
-        quantiteNumber <= 0 ||
-        !Number.isFinite(
-          prixTotalNumber
-        ) ||
-        prixTotalNumber <= 0
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Quantité ou prix invalide.",
-          });
-      }
+          req
 
-      // FIFO: consume the oldest cheque first, then continue
-      // automatically on the next cheque if necessary.
-      const allocationResult =
-        await buildFifoAllocations(
-          centre._id,
-          prixTotalNumber
-        );
+        );
 
-      if (
-        allocationResult.manque >
-        0.005
-      ) {
-        return res
-          .status(409)
-          .json({
-            code:
-              "INSUFFICIENT_ADVANCE",
-            message:
-              "Solde total des avances insuffisant.",
-            solde:
-              allocationResult.totalDisponible,
-            montantBon:
-              prixTotalNumber,
-            manque:
-              allocationResult.manque,
-          });
-      }
 
-      const allocations =
-        allocationResult.allocations;
 
-      const avance =
-        allocations[0]?.avance;
+      if (
 
-      if (!avance) {
-        return res
-          .status(400)
-          .json({
-            code:
-              "NO_ACTIVE_ADVANCE",
-            message:
-              "Aucune avance disponible pour ce centre. Ajoutez d'abord un nouveau chèque d'avance.",
-          });
-      }
+        !currentUser ||
 
-      if (req.file) {
-        const uploadResult =
-          await uploadImageToCloudinary(
-            req.file,
-            `suivi-gasoil/${centre.code.toLowerCase()}/bons`
-          );
+        currentUser.active ===
 
-        uploadedImageUrl =
-          uploadResult.secure_url;
-      }
+          false
 
-      const actor =
-        await getActionUserSnapshot(
-          req,
-          currentUser
-        );
+      ) {
 
-      const gasoil =
-        new Gasoil({
-          centre:
-            centre._id,
-          date,
-          autocar:
-            String(
-              autocar
-            ).trim(),
-          depart:
-            String(
-              depart
-            ).trim(),
-          quantite:
-            quantiteNumber,
-          numeroBon:
-            String(
-              numeroBon
-            ).trim(),
-          prixTotal:
-            Number(
-              prixTotalNumber.toFixed(
-                2
-              )
-            ),
-          observation:
-            String(
-              observation || ""
-            ).trim(),
-          imageBon:
-            uploadedImageUrl,
-          avance,
-          allocations,
-          createdBy:
-            actor.userId,
-          createdByName:
-            actor.name,
-          createdByMatricule:
-            actor.matricule,
-          createdByEmail:
-            actor.email,
-        });
+        return res
 
-      await gasoil.save();
+          .status(401)
 
-      await syncCentreAdvanceStatuses(
-        centre._id
-      );
+          .json({
 
-      const populated =
-        await Gasoil.findById(
-          gasoil._id
-        )
-          .populate(
-            "avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "allocations.avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "centre",
-            "name code active"
-          );
+            message:
 
-      res.status(201).json(
-        populated
-      );
-    } catch (error) {
-      console.error(error);
+              "Session utilisateur invalide.",
 
-      if (
-        uploadedImageUrl
-      ) {
-        await deleteCloudinaryImage(
-          uploadedImageUrl
-        );
-      }
+          });
 
-      if (
-        error.code === 11000
-      ) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de bon existe déjà dans ce centre.",
-          });
-      }
+      }
 
-      res.status(500).json({
-        message:
-          "Erreur lors de l'enregistrement du bon.",
-      });
-    }
-  }
+
+
+      const centreId =
+
+        getRequestedCentreId(
+
+          req,
+
+          currentUser,
+
+          {
+
+            requiredForSuperAdmin:
+
+              true,
+
+            bodyFirst: true,
+
+          }
+
+        );
+
+
+
+      if (!centreId) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Sélectionnez un centre avant d'ajouter un bon.",
+
+          });
+
+      }
+
+
+
+      const centre =
+
+        await assertCentreAvailable(
+
+          centreId
+
+        );
+
+
+
+      if (!centre) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Centre invalide ou désactivé.",
+
+          });
+
+      }
+
+
+
+      const {
+
+        date,
+
+        autocar,
+
+        depart,
+
+        quantite,
+
+        numeroBon,
+
+        prixTotal,
+
+        observation,
+
+      } = req.body;
+
+
+
+      if (
+
+        !date ||
+
+        !autocar ||
+
+        !depart ||
+
+        !quantite ||
+
+        !numeroBon ||
+
+        !prixTotal
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Veuillez remplir tous les champs obligatoires.",
+
+          });
+
+      }
+
+
+
+      const duplicate =
+
+        await Gasoil.findOne({
+
+          centre:
+
+            centre._id,
+
+          numeroBon:
+
+            String(
+
+              numeroBon
+
+            ).trim(),
+
+        });
+
+
+
+      if (duplicate) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de bon existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      const quantiteNumber =
+
+        Number(quantite);
+
+
+
+      const prixTotalNumber =
+
+        Number(prixTotal);
+
+
+
+      if (
+
+        !Number.isFinite(
+
+          quantiteNumber
+
+        ) ||
+
+        quantiteNumber <= 0 ||
+
+        !Number.isFinite(
+
+          prixTotalNumber
+
+        ) ||
+
+        prixTotalNumber <= 0
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Quantité ou prix invalide.",
+
+          });
+
+      }
+
+
+
+      // FIFO: consume the oldest cheque first, then continue
+
+      // automatically on the next cheque if necessary.
+
+      const allocationResult =
+
+        await buildFifoAllocations(
+
+          centre._id,
+
+          prixTotalNumber
+
+        );
+
+
+
+      const allocations =
+
+        allocationResult.allocations;
+
+
+
+      const avance =
+
+        allocations[0]?.avance;
+
+
+
+      if (!avance) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            code:
+
+              "NO_ACTIVE_ADVANCE",
+
+            message:
+
+              "Aucune avance disponible pour ce centre. Ajoutez d'abord un nouveau chèque d'avance.",
+
+          });
+
+      }
+
+
+
+      if (req.file) {
+
+        const uploadResult =
+
+          await uploadImageToCloudinary(
+
+            req.file,
+
+            `suivi-gasoil/${centre.code.toLowerCase()}/bons`
+
+          );
+
+
+
+        uploadedImageUrl =
+
+          uploadResult.secure_url;
+
+      }
+
+
+
+      const actor =
+
+        await getActionUserSnapshot(
+
+          req,
+
+          currentUser
+
+        );
+
+
+
+      const gasoil =
+
+        new Gasoil({
+
+          centre:
+
+            centre._id,
+
+          date,
+
+          autocar:
+
+            String(
+
+              autocar
+
+            ).trim(),
+
+          depart:
+
+            String(
+
+              depart
+
+            ).trim(),
+
+          quantite:
+
+            quantiteNumber,
+
+          numeroBon:
+
+            String(
+
+              numeroBon
+
+            ).trim(),
+
+          prixTotal:
+
+            Number(
+
+              prixTotalNumber.toFixed(
+
+                2
+
+              )
+
+            ),
+
+          observation:
+
+            String(
+
+              observation || ""
+
+            ).trim(),
+
+          imageBon:
+
+            uploadedImageUrl,
+
+          avance,
+
+          allocations,
+
+          createdBy:
+
+            actor.userId,
+
+          createdByName:
+
+            actor.name,
+
+          createdByMatricule:
+
+            actor.matricule,
+
+          createdByEmail:
+
+            actor.email,
+
+        });
+
+
+
+      await gasoil.save();
+
+
+
+      await syncCentreAdvanceStatuses(
+
+        centre._id
+
+      );
+
+
+
+      const populated =
+
+        await Gasoil.findById(
+
+          gasoil._id
+
+        )
+
+          .populate(
+
+            "avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "allocations.avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          );
+
+
+
+      res.status(201).json(
+
+        populated
+
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      if (
+
+        uploadedImageUrl
+
+      ) {
+
+        await deleteCloudinaryImage(
+
+          uploadedImageUrl
+
+        );
+
+      }
+
+
+
+      if (
+
+        error.code === 11000
+
+      ) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de bon existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors de l'enregistrement du bon.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // UPDATE
+
 // ==========================================================
+
+
 
 router.put(
-  "/:id",
-  upload.single(
-    "imageBon"
-  ),
-  async (req, res) => {
-    let newImageUrl = "";
 
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
+  "/:id",
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  upload.single(
 
-      const gasoil =
-        await Gasoil.findById(
-          req.params.id
-        );
+    "imageBon"
 
-      if (!gasoil) {
-        return res
-          .status(404)
-          .json({
-            message:
-              "Enregistrement introuvable.",
-          });
-      }
+  ),
 
-      if (
-        !canAccessRecord(
-          currentUser,
-          gasoil
-        )
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Vous ne pouvez modifier que les bons de votre centre.",
-          });
-      }
+  async (req, res) => {
 
-      const {
-        date,
-        autocar,
-        depart,
-        quantite,
-        numeroBon,
-        prixTotal,
-        observation,
-      } = req.body;
+    let newImageUrl = "";
 
-      if (
-        !date ||
-        !autocar ||
-        !depart ||
-        !quantite ||
-        !numeroBon ||
-        !prixTotal
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Veuillez remplir tous les champs obligatoires.",
-          });
-      }
 
-      const duplicate =
-        await Gasoil.findOne({
-          centre:
-            gasoil.centre,
-          numeroBon:
-            String(
-              numeroBon
-            ).trim(),
-          _id: {
-            $ne:
-              gasoil._id,
-          },
-        });
 
-      if (duplicate) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de bon existe déjà dans ce centre.",
-          });
-      }
+    try {
 
-      const quantiteNumber =
-        Number(quantite);
+      const currentUser =
 
-      const prixTotalNumber =
-        Number(prixTotal);
+        await getCurrentUser(
 
-      if (
-        !Number.isFinite(
-          quantiteNumber
-        ) ||
-        quantiteNumber <= 0 ||
-        !Number.isFinite(
-          prixTotalNumber
-        ) ||
-        prixTotalNumber <= 0
-      ) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Quantité ou prix invalide.",
-          });
-      }
+          req
 
-      const allocationResult =
-        await buildFifoAllocations(
-          gasoil.centre,
-          prixTotalNumber,
-          gasoil._id
-        );
+        );
 
-      if (
-        allocationResult.manque >
-        0.005
-      ) {
-        return res
-          .status(409)
-          .json({
-            code:
-              "INSUFFICIENT_ADVANCE",
-            message:
-              "Le nouveau prix dépasse le solde total disponible des avances.",
-            solde:
-              allocationResult.totalDisponible,
-            montantBon:
-              prixTotalNumber,
-            manque:
-              allocationResult.manque,
-          });
-      }
 
-      const allocations =
-        allocationResult.allocations;
 
-      const primaryAvance =
-        allocations[0]?.avance;
+      if (!currentUser) {
 
-      if (!primaryAvance) {
-        return res
-          .status(400)
-          .json({
-            code:
-              "NO_ACTIVE_ADVANCE",
-            message:
-              "Aucune avance disponible pour ce centre.",
-          });
-      }
+        return res
 
-      const oldImageUrl =
-        gasoil.imageBon || "";
+          .status(401)
 
-      if (req.file) {
-        const centre =
-          await Centre.findById(
-            gasoil.centre
-          );
+          .json({
 
-        const folderCode =
-          centre?.code
-            ?.toLowerCase() ||
-          "centre";
+            message:
 
-        const uploadResult =
-          await uploadImageToCloudinary(
-            req.file,
-            `suivi-gasoil/${folderCode}/bons`
-          );
+              "Session utilisateur invalide.",
 
-        newImageUrl =
-          uploadResult.secure_url;
-      }
+          });
 
-      gasoil.date = date;
+      }
 
-      gasoil.autocar =
-        String(
-          autocar
-        ).trim();
 
-      gasoil.depart =
-        String(
-          depart
-        ).trim();
 
-      gasoil.quantite =
-        quantiteNumber;
+      const gasoil =
 
-      gasoil.numeroBon =
-        String(
-          numeroBon
-        ).trim();
+        await Gasoil.findById(
 
-      gasoil.prixTotal =
-        Number(
-          prixTotalNumber.toFixed(
-            2
-          )
-        );
+          req.params.id
 
-      gasoil.avance =
-        primaryAvance;
+        );
 
-      gasoil.allocations =
-        allocations;
 
-      gasoil.observation =
-        String(
-          observation || ""
-        ).trim();
 
-      if (newImageUrl) {
-        gasoil.imageBon =
-          newImageUrl;
-      }
+      if (!gasoil) {
 
-      const actor =
-        await getActionUserSnapshot(
-          req,
-          currentUser
-        );
+        return res
 
-      gasoil.updatedBy =
-        actor.userId;
+          .status(404)
 
-      gasoil.updatedByName =
-        actor.name;
+          .json({
 
-      gasoil.updatedByMatricule =
-        actor.matricule;
+            message:
 
-      gasoil.updatedByEmail =
-        actor.email;
+              "Enregistrement introuvable.",
 
-      gasoil.lastEditedAt =
-        new Date();
+          });
 
-      await gasoil.save();
+      }
 
-      await syncCentreAdvanceStatuses(
-        gasoil.centre
-      );
 
-      if (
-        newImageUrl &&
-        oldImageUrl
-      ) {
-        await deleteCloudinaryImage(
-          oldImageUrl
-        );
-      }
 
-      const populated =
-        await Gasoil.findById(
-          gasoil._id
-        )
-          .populate(
-            "avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "allocations.avance",
-            "numeroCheque montant station statut centre"
-          )
-          .populate(
-            "centre",
-            "name code active"
-          );
+      if (
 
-      res.json(populated);
-    } catch (error) {
-      console.error(error);
+        !canAccessRecord(
 
-      if (newImageUrl) {
-        await deleteCloudinaryImage(
-          newImageUrl
-        );
-      }
+          currentUser,
 
-      if (
-        error.code === 11000
-      ) {
-        return res
-          .status(409)
-          .json({
-            message:
-              "Ce numéro de bon existe déjà dans ce centre.",
-          });
-      }
+          gasoil
 
-      res.status(500).json({
-        message:
-          "Erreur lors de la modification du bon.",
-      });
-    }
-  }
+        )
+
+      ) {
+
+        return res
+
+          .status(403)
+
+          .json({
+
+            message:
+
+              "Vous ne pouvez modifier que les bons de votre centre.",
+
+          });
+
+      }
+
+
+
+      const {
+
+        date,
+
+        autocar,
+
+        depart,
+
+        quantite,
+
+        numeroBon,
+
+        prixTotal,
+
+        observation,
+
+      } = req.body;
+
+
+
+      if (
+
+        !date ||
+
+        !autocar ||
+
+        !depart ||
+
+        !quantite ||
+
+        !numeroBon ||
+
+        !prixTotal
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Veuillez remplir tous les champs obligatoires.",
+
+          });
+
+      }
+
+
+
+      const duplicate =
+
+        await Gasoil.findOne({
+
+          centre:
+
+            gasoil.centre,
+
+          numeroBon:
+
+            String(
+
+              numeroBon
+
+            ).trim(),
+
+          _id: {
+
+            $ne:
+
+              gasoil._id,
+
+          },
+
+        });
+
+
+
+      if (duplicate) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de bon existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      const quantiteNumber =
+
+        Number(quantite);
+
+
+
+      const prixTotalNumber =
+
+        Number(prixTotal);
+
+
+
+      if (
+
+        !Number.isFinite(
+
+          quantiteNumber
+
+        ) ||
+
+        quantiteNumber <= 0 ||
+
+        !Number.isFinite(
+
+          prixTotalNumber
+
+        ) ||
+
+        prixTotalNumber <= 0
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            message:
+
+              "Quantité ou prix invalide.",
+
+          });
+
+      }
+
+
+
+      const allocationResult =
+
+        await buildFifoAllocations(
+
+          gasoil.centre,
+
+          prixTotalNumber,
+
+          gasoil._id
+
+        );
+
+
+
+      const allocations =
+
+        allocationResult.allocations;
+
+
+
+      const primaryAvance =
+
+        allocations[0]?.avance;
+
+
+
+      if (!primaryAvance) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            code:
+
+              "NO_ACTIVE_ADVANCE",
+
+            message:
+
+              "Aucune avance disponible pour ce centre.",
+
+          });
+
+      }
+
+
+
+      const oldImageUrl =
+
+        gasoil.imageBon || "";
+
+
+
+      if (req.file) {
+
+        const centre =
+
+          await Centre.findById(
+
+            gasoil.centre
+
+          );
+
+
+
+        const folderCode =
+
+          centre?.code
+
+            ?.toLowerCase() ||
+
+          "centre";
+
+
+
+        const uploadResult =
+
+          await uploadImageToCloudinary(
+
+            req.file,
+
+            `suivi-gasoil/${folderCode}/bons`
+
+          );
+
+
+
+        newImageUrl =
+
+          uploadResult.secure_url;
+
+      }
+
+
+
+      gasoil.date = date;
+
+
+
+      gasoil.autocar =
+
+        String(
+
+          autocar
+
+        ).trim();
+
+
+
+      gasoil.depart =
+
+        String(
+
+          depart
+
+        ).trim();
+
+
+
+      gasoil.quantite =
+
+        quantiteNumber;
+
+
+
+      gasoil.numeroBon =
+
+        String(
+
+          numeroBon
+
+        ).trim();
+
+
+
+      gasoil.prixTotal =
+
+        Number(
+
+          prixTotalNumber.toFixed(
+
+            2
+
+          )
+
+        );
+
+
+
+      gasoil.avance =
+
+        primaryAvance;
+
+
+
+      gasoil.allocations =
+
+        allocations;
+
+
+
+      gasoil.observation =
+
+        String(
+
+          observation || ""
+
+        ).trim();
+
+
+
+      if (newImageUrl) {
+
+        gasoil.imageBon =
+
+          newImageUrl;
+
+      }
+
+
+
+      const actor =
+
+        await getActionUserSnapshot(
+
+          req,
+
+          currentUser
+
+        );
+
+
+
+      gasoil.updatedBy =
+
+        actor.userId;
+
+
+
+      gasoil.updatedByName =
+
+        actor.name;
+
+
+
+      gasoil.updatedByMatricule =
+
+        actor.matricule;
+
+
+
+      gasoil.updatedByEmail =
+
+        actor.email;
+
+
+
+      gasoil.lastEditedAt =
+
+        new Date();
+
+
+
+      await gasoil.save();
+
+
+
+      await syncCentreAdvanceStatuses(
+
+        gasoil.centre
+
+      );
+
+
+
+      if (
+
+        newImageUrl &&
+
+        oldImageUrl
+
+      ) {
+
+        await deleteCloudinaryImage(
+
+          oldImageUrl
+
+        );
+
+      }
+
+
+
+      const populated =
+
+        await Gasoil.findById(
+
+          gasoil._id
+
+        )
+
+          .populate(
+
+            "avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "allocations.avance",
+
+            "numeroCheque montant station statut centre"
+
+          )
+
+          .populate(
+
+            "centre",
+
+            "name code active"
+
+          );
+
+
+
+      res.json(populated);
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      if (newImageUrl) {
+
+        await deleteCloudinaryImage(
+
+          newImageUrl
+
+        );
+
+      }
+
+
+
+      if (
+
+        error.code === 11000
+
+      ) {
+
+        return res
+
+          .status(409)
+
+          .json({
+
+            message:
+
+              "Ce numéro de bon existe déjà dans ce centre.",
+
+          });
+
+      }
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors de la modification du bon.",
+
+      });
+
+    }
+
+  }
+
 );
 
+
+
 // ==========================================================
+
 // DELETE
+
 // ADMIN / SUPER_ADMIN -> any bon in scope
+
 // USER -> only their own bon
+
 // ==========================================================
+
+
 
 router.delete(
-  "/:id",
-  async (req, res) => {
-    try {
-      const currentUser =
-        await getCurrentUser(
-          req
-        );
 
-      if (!currentUser) {
-        return res
-          .status(401)
-          .json({
-            message:
-              "Session utilisateur invalide.",
-          });
-      }
+  "/:id",
 
-      const gasoil =
-        await Gasoil.findById(
-          req.params.id
-        );
+  async (req, res) => {
 
-      if (!gasoil) {
-        return res
-          .status(404)
-          .json({
-            message:
-              "Enregistrement introuvable.",
-          });
-      }
+    try {
 
-      if (
-        !canAccessRecord(
-          currentUser,
-          gasoil
-        )
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Vous ne pouvez supprimer que les bons de votre centre.",
-          });
-      }
+      const currentUser =
 
-      if (
-        currentUser.role ===
-          "USER" &&
-        String(
-          gasoil.createdBy ||
-            ""
-        ) !==
-          String(
-            currentUser._id
-          )
-      ) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Vous ne pouvez pas supprimer un bon créé par un autre utilisateur.",
-          });
-      }
+        await getCurrentUser(
 
-      const imageToDelete =
-        gasoil.imageBon || "";
+          req
 
-      await gasoil.deleteOne();
+        );
 
-      if (imageToDelete) {
-        await deleteCloudinaryImage(
-          imageToDelete
-        );
-      }
 
-      await syncCentreAdvanceStatuses(
-        gasoil.centre
-      );
 
-      res.json({
-        message:
-          "Bon supprimé.",
-      });
-    } catch (error) {
-      console.error(error);
+      if (!currentUser) {
 
-      res.status(500).json({
-        message:
-          "Erreur lors de la suppression.",
-      });
-    }
-  }
+        return res
+
+          .status(401)
+
+          .json({
+
+            message:
+
+              "Session utilisateur invalide.",
+
+          });
+
+      }
+
+
+
+      const gasoil =
+
+        await Gasoil.findById(
+
+          req.params.id
+
+        );
+
+
+
+      if (!gasoil) {
+
+        return res
+
+          .status(404)
+
+          .json({
+
+            message:
+
+              "Enregistrement introuvable.",
+
+          });
+
+      }
+
+
+
+      if (
+
+        !canAccessRecord(
+
+          currentUser,
+
+          gasoil
+
+        )
+
+      ) {
+
+        return res
+
+          .status(403)
+
+          .json({
+
+            message:
+
+              "Vous ne pouvez supprimer que les bons de votre centre.",
+
+          });
+
+      }
+
+
+
+      if (
+
+        currentUser.role ===
+
+          "USER" &&
+
+        String(
+
+          gasoil.createdBy ||
+
+            ""
+
+        ) !==
+
+          String(
+
+            currentUser._id
+
+          )
+
+      ) {
+
+        return res
+
+          .status(403)
+
+          .json({
+
+            message:
+
+              "Vous ne pouvez pas supprimer un bon créé par un autre utilisateur.",
+
+          });
+
+      }
+
+
+
+      const imageToDelete =
+
+        gasoil.imageBon || "";
+
+
+
+      await gasoil.deleteOne();
+
+
+
+      if (imageToDelete) {
+
+        await deleteCloudinaryImage(
+
+          imageToDelete
+
+        );
+
+      }
+
+
+
+      await syncCentreAdvanceStatuses(
+
+        gasoil.centre
+
+      );
+
+
+
+      res.json({
+
+        message:
+
+          "Bon supprimé.",
+
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+
+
+      res.status(500).json({
+
+        message:
+
+          "Erreur lors de la suppression.",
+
+      });
+
+    }
+
+  }
+
 );
+
+
 
 module.exports = router;
