@@ -1423,14 +1423,19 @@ function App() {
   };
 
   const openForm = () => {
-    if (!activeAdvance) {
+    // A bon may still be entered when the last cheque is exhausted
+    // or its balance is negative. The backend carries the negative
+    // amount until a new cheque is entered.
+    // We only block if this centre has never had any cheque at all.
+    if (!avances.length) {
       setPage("avances");
       setMessage(
-        "Aucune avance active. Ajoutez d'abord le chèque d'avance de la station."
+        "Aucun chèque d'avance n'existe pour ce centre. Ajoutez d'abord un premier chèque."
       );
       return;
     }
 
+    setMessage("");
     setEditingRecord(null);
     resetForm();
 
@@ -1512,16 +1517,6 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (data.code === "INSUFFICIENT_ADVANCE") {
-          throw new Error(
-            `Solde insuffisant. Solde: ${formatMoney(
-              data.solde
-            )} DH — Bon: ${formatMoney(
-              data.montantBon
-            )} DH — Manque: ${formatMoney(data.manque)} DH.`
-          );
-        }
-
         throw new Error(
           data.message ||
             (editingRecord
